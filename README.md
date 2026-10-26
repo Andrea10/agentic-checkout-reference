@@ -20,8 +20,8 @@ Payments run against a pluggable rail: a stub in Stage 1, Stripe test mode in St
 
 | Stage | Scope | Status |
 | --- | --- | --- |
-| 1 | Skeleton that runs end to end on a stub rail; mandate checks; tests; CI | in progress |
-| 2 | Stripe test-mode rail; ACP-shaped merchant endpoints; failure-case tests (expired, wrong merchant, over cap, replay) | planned |
+| 1 | Skeleton that runs end to end on a stub rail; ACP-shaped merchant tools; mandate checks; tests; CI | in progress |
+| 2 | Stripe test-mode rail; failure-case suite and replay protection (expired, wrong merchant, over cap, replay) | planned |
 | 3 | Demo recording; design decisions; protocol divergence notes | planned |
 
 ## Run it
