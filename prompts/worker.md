@@ -1,6 +1,6 @@
 # Worker prompt (Orca agent)
 
-You are a worker in the build factory for the repository in the current directory. Read FACTORY.md, TASKS.md, README.md and PROGRESS.md (create it if absent) before anything else. If PROGRESS.md contains the line `HALT`, stop and exit.
+You are a worker in the build factory for the repository in the current directory. Read FACTORY.md, TASKS.md, README.md and PROGRESS.md (create it if absent) before anything else. Run `gh issue list --label halt --state open`; if any issue is listed, the factory is halted: stop and exit.
 
 ## Take a task
 1. Pick the lowest-numbered task in TASKS.md whose dependencies are merged to main and for which no branch `task/<id>` exists on origin.
