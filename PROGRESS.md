@@ -30,3 +30,5 @@ to merge PR #2 first; nothing in this PR requires it.
 
 Not written here (T02 has no access to docs/DECISIONS.md): two PROPOSED decisions, on the
 MCP TypeScript SDK major version and on the mandate vocabulary. Both are in the PR body.
+
+T02 PR #4 opened 2026-10-27T00:30:59Z
