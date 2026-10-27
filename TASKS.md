@@ -28,3 +28,4 @@ Ruling 26 Oct (Andrea OS, S133-9): `docs/DECISIONS.md` is append-only and allowe
 ## Claimed / done
 
 (workers append: id · branch · PR · merged date)
+- T02 · task/T02 · PR #4 · not merged
