@@ -6,7 +6,7 @@ Agents take tasks from TASKS.md, build on branches, open PRs. A pre-reviewer age
 
 | Role | Count | Does | Must not |
 | --- | --- | --- | --- |
-| Worker | 1 to 3 in parallel | Takes the next unblocked task, builds on `task/<id>`, opens a PR, writes PROGRESS.md | Edit `.github/`, `prompts/`, FACTORY.md, TASKS.md beyond the Claimed section, SOURCES.md; touch secrets; merge; force-push |
+| Worker | 1 to 3 in parallel | Takes the next unblocked task, builds on `task/<id>`, opens a PR, writes PROGRESS.md | Edit `.github/`, `prompts/`, FACTORY.md, TASKS.md beyond the Claimed section, SOURCES.md (except in task T02); touch secrets; merge; force-push |
 | Pre-reviewer | 1, every 20 minutes | Reviews open PRs against the task's definition of done and the checklist; leaves a comment with a verdict (READY FOR ANDREA / CHANGES NEEDED) and specifics | Approve in GitHub's sense, push commits, merge |
 | Supervisor | 1, hourly; digest 07:30 | Lists branches, PRs, CI, stale agents; restarts a dead worker once; posts status and the digest to issue #1 | Merge, change tasks, write code, commit or push (main is protected; it writes only to issues) |
 | Andrea | 1 | Reads the digest, merges READY PRs, rules on PROPOSED decisions and `needs-andrea` items | Nothing; this is his repo |
