@@ -11,13 +11,19 @@ against any of them; divergences are recorded in `docs/DECISIONS.md`.
 ### MCP specification, revision 2026-07-28 (current)
 
 - URL: https://modelcontextprotocol.io/specification/2026-07-28
+- Also read: https://modelcontextprotocol.io/specification/2026-07-28/basic and https://modelcontextprotocol.io/specification/2026-07-28/deprecated
 - Read: 2026-10-27
 - Takes: the JSON-RPC 2.0 host/client/server model and the **tools** server feature, which is the surface the merchant exposes (`list_products`, `get_product`, `create_cart`, `add_to_cart`, `get_quote`, `place_order`, `confirm_order`).
 
 Notes: this revision describes the base protocol as "Stateless, self-contained requests"
 with "Per-request capability negotiation", and lists server features as Resources,
-Prompts and Tools. Client features are reduced to Elicitation. It also defines opt-in
-extensions (Tasks, MCP Apps, Skills over MCP) that this design does not use.
+Prompts and Tools. Client features are Elicitation, Sampling and Roots. Sampling and
+Roots are **deprecated** as of this revision (SEP-2577) but remain in the specification
+until at least the first revision released on or after 2027-07-28; new implementations
+should not adopt them, so Elicitation is the only client feature this design would
+consider. (Deprecation confirmed at `/specification/2026-07-28/deprecated`, read
+2026-10-27.) It also defines opt-in extensions (Tasks, MCP Apps, Skills over MCP) that
+this design does not use.
 
 ### MCP specification, revision 2025-06-18
 
