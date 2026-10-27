@@ -5,8 +5,9 @@ Design decisions for agentic-checkout-reference, newest at the bottom.
 Each entry carries a **decision**, the **alternative** not taken, **why**, and
 the **cost** it leaves behind. A decision is `PROPOSED` until Andrea rules on
 it, then `ACCEPTED` (or dropped). Workers append; they never edit an entry
-above their own and never mark their own entries `ACCEPTED`. T10 consolidates
-this file.
+above their own, and they never mark their own entries `ACCEPTED` on their own
+judgement — only to record a ruling Andrea has given, naming the date. T10
+consolidates this file.
 
 Created by T06a, seeded with the decisions T01 proposed and Andrea ruled on.
 
@@ -87,9 +88,6 @@ Created by T06a, seeded with the decisions T01 proposed and Andrea ruled on.
   `types` and `import` conditions resolving to `dist/esm`; a `require`
   condition at `dist/cjs` exists, so CommonJS would have worked, but as the
   secondary path. CommonJS would also have given up top-level await.
-  *Later note (T06a, 27 Oct): D09 replaced that SDK with v2, so the specific
-  package named in this cost no longer applies; the ESM decision itself is
-  unaffected.*
 
 ## D07 · No `@eslint/js` dependency — ACCEPTED (Andrea, 27 Oct)
 
@@ -133,9 +131,11 @@ Created by T06a, seeded with the decisions T01 proposed and Andrea ruled on.
 
 ## T06a · Merchant MCP server, catalogue and cart
 
-The entries below are **PROPOSED** and await Andrea's ruling.
+Andrea ruled on D11 to D20 on 27 Oct: all ACCEPTED, with D12 amended — he
+chose the alternative, so D12 below is rewritten to describe what is now
+implemented. D21 is PROPOSED and awaits a ruling.
 
-## D11 · A cart is addressed only by an explicit `cart_id` — PROPOSED (T06a)
+## D11 · A cart is addressed only by an explicit `cart_id` — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** `create_cart` returns a `cart_id`; every later cart call
   carries it. Carts live in an in-process `Map` inside a `CartStore`, one store
@@ -151,20 +151,26 @@ The entries below are **PROPOSED** and await Andrea's ruling.
   for the whole run, and a horizontally scaled merchant would need a real
   store.
 
-## D12 · Cart ids are sequential, not random — PROPOSED (T06a)
+## D12 · Cart ids are random by default, sequential only when injected — ACCEPTED (Andrea, 27 Oct, amended)
 
-- **Decision.** Ids are `cart_000001`, `cart_000002`, ... from an injectable
-  `CartIdFactory` that defaults to a per-store counter.
-- **Alternative.** `crypto.randomUUID()`.
-- **Why.** Deterministic ids make the T09 demo transcript and the T08 agent
-  tests identical on every run, which is what "deterministic" in those tasks
-  asks for.
-- **Cost.** The ids are guessable, so anyone who can call the server can read
-  or alter another caller's cart. A real merchant could not accept that. The
-  factory is injectable precisely so Stage 2 can swap in random ids without
-  touching the store.
+T06a proposed sequential ids as the default. Andrea chose the alternative. The
+entry below describes what is implemented.
 
-## D13 · Refusals are `isError` with a JSON body, and no `structuredContent` — PROPOSED (T06a)
+- **Decision.** `CartStore` defaults to `randomCartIds`, which returns
+  `cart_` followed by a `crypto.randomUUID()`. The `CartIdFactory` stays
+  injectable, and `sequentialCartIds()` remains exported for tests and for the
+  T09 demo, which pass it explicitly when they need a stable transcript.
+- **Alternative.** Sequential `cart_000001` ids as the default, as T06a first
+  proposed.
+- **Why.** A cart id is the only thing standing between a caller and someone
+  else's cart (D11), so the default has to be unguessable. Determinism is a
+  property the tests and the demo need, not the server, and injecting the
+  factory gives it to them without weakening the default.
+- **Cost.** Nothing that reads a cart id can assume a shape or an order, so
+  the one protocol test that asserted on the id now matches a UUID. Any caller
+  wanting a reproducible transcript must inject the factory and say so.
+
+## D13 · Refusals are `isError` with a JSON body, and no `structuredContent` — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** Handlers throw a `MerchantError` carrying a code; the MCP layer
   returns `isError: true` with one text block holding
@@ -179,7 +185,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
   parsing the text block whenever `isError` is set. T07 inherits this envelope
   for mandate refusals.
 
-## D14 · Tool logic sits in plain functions, apart from MCP registration — PROPOSED (T06a)
+## D14 · Tool logic sits in plain functions, apart from MCP registration — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** `merchant/tools.ts` holds the four handlers as ordinary
   functions over a `MerchantState`; `merchant/server.ts` registers them.
@@ -191,7 +197,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
   tests that care about the boundary must parse with the zod schema explicitly,
   and they do.
 
-## D15 · The catalogue shape is internal, not ACP, in T06a — PROPOSED (T06a)
+## D15 · The catalogue shape is internal, not ACP, in T06a — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** Products and carts use plain internal field names
   (`price_minor`, `subtotal_minor`, `line_total_minor`).
@@ -202,7 +208,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
 - **Cost.** T06b will rename or remap these fields, and anything written
   against the T06a shape before then has to follow.
 
-## D16 · Money is an integer of minor units in one hard-coded currency — PROPOSED (T06a)
+## D16 · Money is an integer of minor units in one hard-coded currency — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** All money is an integer number of GBP pence. `CURRENCY` is the
   literal `'GBP'`; no float appears anywhere.
@@ -212,7 +218,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
 - **Cost.** No multi-currency. A second currency would need a real `Money` type
   and a currency check at every boundary, including the mandate's.
 
-## D17 · Stock is checked but never reserved — PROPOSED (T06a)
+## D17 · Stock is checked but never reserved — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** `add_to_cart` refuses when the *merged* line quantity exceeds
   `product.stock`, but nothing is held back for that cart.
@@ -223,7 +229,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
   order is placed. T07's `place_order` should re-check rather than trust the
   cart.
 
-## D18 · `zod` is a direct dependency — PROPOSED (T06a)
+## D18 · `zod` is a direct dependency — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** `zod` is pinned exactly at 4.6.7 in `dependencies`.
 - **Alternative.** Relying on it transitively through
@@ -235,7 +241,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
 - **Cost.** One more exact pin to keep in step with the SDK's own range
   (`zod: ^4.2.0`). If a future SDK bump needs a zod major, both move together.
 
-## D19 · Line quantity is capped at 99 and defaults to 1 — PROPOSED (T06a)
+## D19 · Line quantity is capped at 99 and defaults to 1 — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** `MAX_LINE_QUANTITY` is 99, enforced on the merged line as well
   as the increment. `add_to_cart`'s `quantity` defaults to 1.
@@ -245,7 +251,7 @@ The entries below are **PROPOSED** and await Andrea's ruling.
 - **Cost.** 99 is arbitrary and is not a merchant rule; a real catalogue would
   set it per product.
 
-## D20 · Protocol tests drive raw JSON-RPC, not the MCP client — PROPOSED (T06a)
+## D20 · Protocol tests drive raw JSON-RPC, not the MCP client — ACCEPTED (Andrea, 27 Oct)
 
 - **Decision.** `test/merchant/protocol.test.ts` writes JSON-RPC messages by
   hand, over the SDK's `InMemoryTransport` pair and over a real spawned
@@ -256,3 +262,20 @@ The entries below are **PROPOSED** and await Andrea's ruling.
   `2025-11-25`, which `serveStdio` serves through its default
   `legacy: 'serve'` path. The modern 2026-07-28 opening is therefore **not**
   exercised by these tests; T08 covers the client side and should exercise it.
+
+## D21 · D06's cost cites an SDK that D09 replaced — PROPOSED (T06a)
+
+- **Decision.** Leave D06's text exactly as ruled and record the consequence
+  here instead. (T06a first wrote this as a dated note inside D06's Cost
+  bullet; pre-review round 1 was right that an insertion into a ruled entry is
+  not an append, so it was moved here whole.)
+- **Alternative.** Amend D06 in place.
+- **Why.** D06's cost names `@modelcontextprotocol/sdk` 1.32.2 and argues from
+  how that package is published. D09 replaced it with the v2 SDK
+  (`@modelcontextprotocol/server`), so that specific justification no longer
+  applies. The ESM decision itself stands on its own: `type: module`,
+  `moduleResolution: nodenext`, and a `.js` extension on every relative
+  import, which is what T06a is built on.
+- **Cost.** A reader of D06 has to reach D21 to learn that one line of its
+  cost is stale, and the two entries are 150 lines apart. T10 consolidates
+  this file and should fold them together then.
