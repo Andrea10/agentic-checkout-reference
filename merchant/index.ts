@@ -7,7 +7,13 @@
 export { CATALOGUE, CURRENCY, findProduct } from './catalogue.js';
 export type { Currency, Product } from './catalogue.js';
 
-export { CartStore, MAX_LINE_QUANTITY, sequentialCartIds, systemClock } from './cart.js';
+export {
+  CartStore,
+  MAX_LINE_QUANTITY,
+  randomCartIds,
+  sequentialCartIds,
+  systemClock,
+} from './cart.js';
 export type { Cart, CartIdFactory, CartItemRequest, CartLine, Clock } from './cart.js';
 
 export { MerchantError, toErrorBody } from './errors.js';

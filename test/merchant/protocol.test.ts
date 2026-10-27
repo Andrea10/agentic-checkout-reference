@@ -362,7 +362,10 @@ describe('merchant server over a spawned stdio process', () => {
       cart: { cart_id: string; items: unknown[]; subtotal_minor: number };
     };
 
-    expect(cart.cart_id).toMatch(/^cart_\d{6}$/);
+    // The spawned server uses the default factory, so the id is a random UUID.
+    expect(cart.cart_id).toMatch(
+      /^cart_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     expect(cart.items).toHaveLength(1);
     expect(cart.subtotal_minor).toBeGreaterThan(0);
   });

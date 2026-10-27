@@ -8,6 +8,8 @@
  * reference implementation, not a database.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { CURRENCY, findProduct, type Currency, type Product } from './catalogue.js';
 import { MerchantError } from './errors.js';
 
@@ -47,18 +49,26 @@ export interface CartItemRequest {
 /** Returns a new ISO-8601 timestamp. Injected so tests can freeze time. */
 export type Clock = () => string;
 
-/** Returns the next cart id. Injected so tests get stable ids. */
+/** Returns the next cart id. Injected so tests and the demo get stable ids. */
 export type CartIdFactory = () => string;
 
 /** Wall-clock time, to the second, in UTC. */
 export const systemClock: Clock = () => new Date().toISOString();
 
 /**
+ * The default cart ids: `cart_` followed by a random UUID.
+ *
+ * Unguessable, because a cart id is the only thing standing between a caller
+ * and someone else's cart (D12). Tests and the T09 demo inject
+ * {@link sequentialCartIds} instead when they need a stable transcript.
+ */
+export const randomCartIds: CartIdFactory = () => `cart_${randomUUID()}`;
+
+/**
  * Sequential cart ids: `cart_000001`, `cart_000002`, ...
  *
- * Deterministic on purpose, so the T09 demo and the T08 agent tests produce
- * the same transcript on every run. The ids are therefore guessable, which a
- * real merchant could not accept; see docs/DECISIONS.md.
+ * Deterministic, and therefore guessable: this is for tests and the demo, and
+ * must never be the default. See D12 in docs/DECISIONS.md.
  */
 export function sequentialCartIds(): CartIdFactory {
   let next = 0;
@@ -111,7 +121,7 @@ export class CartStore {
     options: { nextId?: CartIdFactory; now?: Clock } = {},
   ) {
     this.#catalogue = catalogue;
-    this.#nextId = options.nextId ?? sequentialCartIds();
+    this.#nextId = options.nextId ?? randomCartIds;
     this.#now = options.now ?? systemClock;
   }
 

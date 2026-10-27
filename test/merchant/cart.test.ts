@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { CATALOGUE } from '../../merchant/catalogue.js';
-import { CartStore, MAX_LINE_QUANTITY, sequentialCartIds } from '../../merchant/cart.js';
+import {
+  CartStore,
+  MAX_LINE_QUANTITY,
+  randomCartIds,
+  sequentialCartIds,
+} from '../../merchant/cart.js';
 import { MerchantError } from '../../merchant/errors.js';
 
 /** A store with frozen time, so timestamps are not a source of flake. */
@@ -22,6 +27,21 @@ describe('CartStore', () => {
     expect(cart.subtotal_minor).toBe(0);
     expect(cart.currency).toBe('GBP');
     expect(cart.created_at).toBe('2026-10-27T00:00:00.000Z');
+  });
+
+  it('defaults to unguessable ids: distinct, UUID-shaped, never sequential', () => {
+    // No nextId injected, so the store uses randomCartIds (D12).
+    const carts = new CartStore(CATALOGUE);
+    const ids = [carts.create().cart_id, carts.create().cart_id, carts.create().cart_id];
+
+    expect(new Set(ids).size).toBe(3);
+    for (const id of ids) {
+      expect(id).toMatch(
+        /^cart_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+    }
+    expect(ids).not.toEqual(['cart_000001', 'cart_000002', 'cart_000003']);
+    expect(randomCartIds()).not.toBe(randomCartIds());
   });
 
   it('gives each cart its own id', () => {
