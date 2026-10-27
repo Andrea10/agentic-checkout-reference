@@ -31,3 +31,4 @@ Ruling 26 Oct (Andrea OS, S133-9): `docs/DECISIONS.md` is append-only and allowe
 
 - T01 · `task/T01` · PR #2 · not merged
 - T03 · `task/T03` · PR #5 · not merged
+- T06a · task/T06a · PR #6 · not merged
