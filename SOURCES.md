@@ -59,12 +59,23 @@ Node.js, Bun and Deno.
 Notes: "The Agentic Commerce Protocol (ACP) is an interaction model and open standard for
 connecting buyers, their AI agents, and businesses to complete purchases seamlessly."
 Apache 2.0; OpenAI and Stripe are Founding Maintainers; the specification is marked beta.
-Latest stable version is **2026-04-17**, laid out as `spec/2026-04-17/openapi/` and
-`spec/2026-04-17/json-schema/`, with `openapi.agentic_checkout.yaml` and
-`openapi.delegate_payment.yaml` as the two primary OpenAPI files. The surfaces named are
-Agentic Checkout API, Delegate Payment API, Product Feed, Orders, Authentication and MCP
-integration. Endpoint paths and product-feed field names are in the YAML and JSON Schema
-files, not the README; T06b must read those files before shaping anything to them.
+Latest stable version is **2026-04-17** (the other dated directories under `spec/` are
+2025-09-29, 2025-12-12, 2026-01-16 and 2026-01-30, plus `unreleased`). It holds three
+directories: `openapi/`, `json-schema/` and `openrpc/`. `openapi/` holds six files:
+`openapi.agentic_checkout.yaml`, `openapi.agentic_checkout_webhook.yaml`,
+`openapi.cart.yaml`, `openapi.delegate_authentication.yaml`,
+`openapi.delegate_payment.yaml` and `openapi.feed.yaml`. The four files this repository
+needs are `openapi.feed.yaml` with `json-schema/schema.feed.json` for the product feed,
+and `openapi.agentic_checkout.yaml` with `json-schema/schema.agentic_checkout.json` for
+checkout. The surfaces named are Agentic Checkout API, Delegate Payment API, Product
+Feed, Orders, Authentication and MCP integration. Endpoint paths and product-feed field
+names are in the YAML and JSON Schema files, not the README; T06b must read those files
+before shaping anything to them.
+
+The directory and file names above were read from the GitHub contents API for
+`spec/`, `spec/2026-04-17/`, `spec/2026-04-17/openapi/`, `spec/2026-04-17/json-schema/`
+and `spec/2026-04-17/openrpc/` on 2026-10-27. The contents of those files have not been
+opened, so nothing here describes the fields or endpoints they define.
 
 ## AP2 mandate model
 
