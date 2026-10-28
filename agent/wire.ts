@@ -16,8 +16,17 @@
  * the merchant ever renames or retypes a field the agent reads, so the break
  * lands in `npm run build` with the field named rather than in a demo.
  *
- * Every amount is an integer of GBP minor units (pence), as everywhere else
- * in this repository (D16).
+ * Every amount is a whole number of GBP minor units (pence), as everywhere
+ * else in this repository (D16) — but the schemas below type money as
+ * `number`, not `int`, for the reason the merchant gives in D67: a reader
+ * that enforces a rule turns a breach of it into a parse failure, which here
+ * would mean the agent reporting "I cannot read this body" instead of the
+ * amount the merchant actually quoted. Whether an amount is a legal integer
+ * of minor units is the mandate policy's call (`amount_invalid`), made
+ * against the merchant's stored quote, and the agent re-deciding it earlier
+ * can only lose information. Counts — quantities and the cart version — stay
+ * `int`, because they are not money and a fractional one is nothing the agent
+ * could act on.
  */
 
 import * as z from 'zod';
@@ -27,7 +36,7 @@ import type { AcpProduct, Cart, Quote } from '../merchant/index.js';
 /** One ACP feed variant, reduced to its price. */
 const variantSchema = z.object({
   id: z.string(),
-  price: z.object({ amount: z.int(), currency: z.string() }),
+  price: z.object({ amount: z.number(), currency: z.string() }),
 });
 
 /**
@@ -56,17 +65,17 @@ export const cartSchema = z.object({
         z.object({
           product_id: z.string(),
           quantity: z.int(),
-          line_total_minor: z.int(),
+          line_total_minor: z.number(),
         }),
       )
       .readonly(),
-    subtotal_minor: z.int(),
+    subtotal_minor: z.number(),
     version: z.int(),
   }),
 });
 
 /** One ACP `Total` entry. The agent reads the `total` one. */
-const totalSchema = z.object({ type: z.string(), amount: z.int() });
+const totalSchema = z.object({ type: z.string(), amount: z.number() });
 
 /** The `quote` body of `get_quote`, shaped to the ACP checkout session (D34). */
 export const quoteSchema = z.object({

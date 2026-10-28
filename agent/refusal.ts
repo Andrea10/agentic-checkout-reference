@@ -10,9 +10,10 @@
  * Three bodies arrive on that one envelope, and all three land here:
  *
  * 1. The merchant's own envelope, which parses into a `code` and a `message`.
- * 2. `place_order`'s refusal, which carries the list of mandate checks that
- *    failed as well (T07a). The field name is read tolerantly — see
- *    {@link readReasons}.
+ * 2. `place_order`'s `mandate_refused`, which carries `error.reasons`: every
+ *    mandate check that failed, in the order the policy made them, as the
+ *    mandate layer's own `PolicyRefusal` objects (D66). The agent reads that
+ *    one field and no other — see {@link readReasons}.
  * 3. Something that is not the envelope at all: the SDK's own input-schema
  *    rejection answers `isError: true` with a plain sentence. That becomes
  *    the code `tool_error` with the sentence as its message (D78), so a
@@ -23,6 +24,9 @@ import * as z from 'zod';
 
 /** The code the agent uses when a refusal body is not the merchant envelope (D78). */
 export const UNSTRUCTURED_REFUSAL_CODE = 'tool_error';
+
+/** The merchant's code for "the mandate did not authorise this order" (D66). */
+export const MANDATE_REFUSED_CODE = 'mandate_refused';
 
 /**
  * One failed mandate check, as `place_order` reports it.
@@ -41,17 +45,17 @@ export interface MerchantRefusal {
   /** The merchant's refusal code, or {@link UNSTRUCTURED_REFUSAL_CODE}. */
   readonly code: string;
   readonly message: string;
-  /** The mandate checks that failed. Empty for every refusal but `place_order`'s. */
+  /** The mandate checks that failed. Empty for every refusal but `mandate_refused`. */
   readonly reasons: readonly RefusalReason[];
 }
 
 /**
  * The merchant's refusal envelope, as the agent reads it.
  *
- * Only `error.code` and `error.message` are required, because only those two
- * are on main today. Everything else on the body is ignored rather than
- * rejected, so a later merchant may add fields without breaking this agent
- * (D77).
+ * Only `error.code` and `error.message` are required, because they are the
+ * two every refusal carries. Everything else on the body is ignored rather
+ * than rejected, so a later merchant may add fields without breaking this
+ * agent (D77).
  */
 const refusalBodySchema = z.object({
   error: z.object({
@@ -60,31 +64,25 @@ const refusalBodySchema = z.object({
   }),
 });
 
-/** A reason list as either of the two shapes `place_order` might use. */
-const reasonListSchema = z.union([
-  z.array(z.object({ reason: z.string(), message: z.string() })),
-  z.array(z.string()).transform((codes) =>
-    codes.map((reason) => ({ reason, message: reason })),
-  ),
-]);
+/** `error.reasons`, as `MerchantErrorBody` declares it. */
+const reasonsSchema = z.array(z.object({ reason: z.string(), message: z.string() }));
 
 /**
  * Pulls the failed mandate checks off a refusal body.
  *
- * `place_order` is T07a's and is not on main, so the agent accepts either
- * `error.refusals` (the `PolicyRefusal` objects the mandate layer already
- * produces) or `error.reasons` (bare codes), and treats their absence as an
- * empty list rather than an error. T09 reconciles this against the shipped
- * tool; until then the tolerance is deliberate, not an oversight.
+ * One field, `reasons`, because that is the one the merchant ships (D66). An
+ * earlier draft of this file also accepted `error.refusals` and a list of
+ * bare code strings, written before `place_order` was on main. Both are gone:
+ * tolerance for a field no merchant has ever sent is speculative code kept
+ * alive by a test that pins fiction, and it hid the real shape behind two
+ * alternatives a reader would have to rule out.
+ *
+ * Absence is still an empty list rather than an error, because every refusal
+ * except `mandate_refused` arrives without the field.
  */
 function readReasons(error: Record<string, unknown>): readonly RefusalReason[] {
-  for (const field of ['refusals', 'reasons'] as const) {
-    const parsed = reasonListSchema.safeParse(error[field]);
-    if (parsed.success) {
-      return parsed.data;
-    }
-  }
-  return [];
+  const parsed = reasonsSchema.safeParse(error['reasons']);
+  return parsed.success ? parsed.data : [];
 }
 
 /**

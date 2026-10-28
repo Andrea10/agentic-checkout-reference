@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { connectStdio, NEGOTIATE_NEWEST } from '../../agent/index.js';
 import { SERVER_INFO } from '../../merchant/index.js';
-import { spawnMerchant } from './harness.js';
+import { MERCHANT_TOOL_NAMES, spawnMerchant } from './harness.js';
 
 import type { MerchantConnection } from '../../agent/index.js';
 
@@ -32,8 +32,8 @@ const MODERN_REVISION = '2026-07-28';
 /** The revision `serveStdio` serves to a 2025-era opening (T06a's tests). */
 const LEGACY_REVISION = '2025-11-25';
 
-/** The five tools on main. `place_order` is T07a's and is not here yet. */
-const TOOL_NAMES = ['add_to_cart', 'create_cart', 'get_product', 'get_quote', 'list_products'];
+/** The six tools the merchant advertises on main, including T07a's `place_order`. */
+const TOOL_NAMES = MERCHANT_TOOL_NAMES;
 
 describe('the v2 client opening a connection to merchant/stdio.ts', () => {
   let merchant: MerchantConnection;

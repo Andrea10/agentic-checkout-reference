@@ -47,6 +47,7 @@ export type {
 export type { AgentIdentity } from './identity.js';
 
 export {
+  APPROVED,
   AWAITING_CONFIRMATION,
   PLACE_ORDER_TOOL,
   placeOrder,
@@ -56,7 +57,12 @@ export type { HeldOrder, OrderOutcome, PlacedOrder } from './order.js';
 export { EMPTY_MEMORY } from './planner.js';
 export type { PlanMemory, PlanStep, PlanStepKind, Planner, ProductPick } from './planner.js';
 
-export { UNSTRUCTURED_REFUSAL_CODE, describeRefusal, readRefusal } from './refusal.js';
+export {
+  MANDATE_REFUSED_CODE,
+  UNSTRUCTURED_REFUSAL_CODE,
+  describeRefusal,
+  readRefusal,
+} from './refusal.js';
 export type { MerchantRefusal, RefusalReason } from './refusal.js';
 
 export { DEFAULT_MAX_STEPS, runPlan } from './run.js';

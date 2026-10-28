@@ -7,7 +7,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { UNSTRUCTURED_REFUSAL_CODE, describeRefusal, readRefusal } from '../../agent/index.js';
+import {
+  MANDATE_REFUSED_CODE,
+  UNSTRUCTURED_REFUSAL_CODE,
+  describeRefusal,
+  readRefusal,
+} from '../../agent/index.js';
 
 describe('the merchant envelope', () => {
   it('reads the code and the message', () => {
@@ -34,16 +39,16 @@ describe('the merchant envelope', () => {
   });
 });
 
-describe('place_order’s refusal, which lists the mandate checks that failed', () => {
-  it('reads error.refusals as PolicyRefusal objects', () => {
+describe('place_order’s refusal, which lists the mandate checks that failed (D66)', () => {
+  it('reads error.reasons as the mandate layer’s PolicyRefusal objects', () => {
     const refusal = readRefusal(
       JSON.stringify({
         error: {
-          code: 'mandate_refused',
-          message: 'the mandate does not cover this purchase',
-          refusals: [
-            { reason: 'mandate_expired', message: 'valid_until was 2026-10-26T00:00:00Z' },
-            { reason: 'budget_exceeded', message: '2350 asked, 1000 left' },
+          code: MANDATE_REFUSED_CODE,
+          message: 'the mandate does not authorise this order: mandate_expired, budget_exceeded',
+          reasons: [
+            { reason: 'mandate_expired', message: 'this mandate expired at 2026-10-26T00:00:00Z' },
+            { reason: 'budget_exceeded', message: '2350 is more than the 1000 GBP left' },
           ],
         },
       }),
@@ -54,29 +59,32 @@ describe('place_order’s refusal, which lists the mandate checks that failed', 
       'mandate_expired',
       'budget_exceeded',
     ]);
-    expect(refusal.reasons[1]?.message).toBe('2350 asked, 1000 left');
+    expect(refusal.reasons[1]?.message).toBe('2350 is more than the 1000 GBP left');
   });
 
-  it('reads error.reasons as bare codes, because T07a may name it that way', () => {
+  it('ignores error.refusals, which no merchant sends', () => {
+    // An earlier draft of the agent accepted this field too, written before
+    // `place_order` was on main. The shipped envelope is `reasons` (D66), so
+    // the tolerance was dropped: a reader should not have to rule out a
+    // second field that never existed.
     const refusal = readRefusal(
       JSON.stringify({
         error: {
-          code: 'mandate_refused',
+          code: MANDATE_REFUSED_CODE,
           message: 'refused',
-          reasons: ['agent_mismatch', 'currency_mismatch'],
+          refusals: [{ reason: 'agent_mismatch', message: 'wrong agent' }],
         },
       }),
     );
 
-    expect(refusal.reasons).toEqual([
-      { reason: 'agent_mismatch', message: 'agent_mismatch' },
-      { reason: 'currency_mismatch', message: 'currency_mismatch' },
-    ]);
+    expect(refusal.code).toBe('mandate_refused');
+    expect(refusal.reasons).toEqual([]);
   });
 
   it('treats a missing reason list as an empty one, not an error', () => {
+    // Every refusal but `mandate_refused` arrives without the field.
     const refusal = readRefusal(
-      JSON.stringify({ error: { code: 'mandate_refused', message: 'refused' } }),
+      JSON.stringify({ error: { code: 'quote_already_ordered', message: 'already ordered' } }),
     );
 
     expect(refusal.reasons).toEqual([]);
@@ -84,7 +92,17 @@ describe('place_order’s refusal, which lists the mandate checks that failed', 
 
   it('ignores a reason list it cannot read', () => {
     const refusal = readRefusal(
-      JSON.stringify({ error: { code: 'mandate_refused', message: 'refused', refusals: 7 } }),
+      JSON.stringify({ error: { code: MANDATE_REFUSED_CODE, message: 'refused', reasons: 7 } }),
+    );
+
+    expect(refusal.reasons).toEqual([]);
+  });
+
+  it('ignores a reason list whose entries are bare strings', () => {
+    const refusal = readRefusal(
+      JSON.stringify({
+        error: { code: MANDATE_REFUSED_CODE, message: 'refused', reasons: ['agent_mismatch'] },
+      }),
     );
 
     expect(refusal.reasons).toEqual([]);

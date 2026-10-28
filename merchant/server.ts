@@ -2,9 +2,9 @@
  * The merchant MCP server.
  *
  * Built on the MCP TypeScript SDK v2 (`@modelcontextprotocol/server`, 2.x,
- * implementing MCP revision 2026-07-28; ruled D09). The five tools here are
- * the catalogue, cart and quote surface. `place_order` and `confirm_order`
- * are T07.
+ * implementing MCP revision 2026-07-28; ruled D09). Six tools: the catalogue,
+ * cart and quote surface, and `place_order`, which is the only one that
+ * spends. `confirm_order` is T07b.
  *
  * Products and quotes are advertised in the ACP vocabulary (see `acp.ts`), so
  * the `outputSchema` a client reads off `tools/list` is an ACP feed product
@@ -14,6 +14,7 @@
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 
 import { toErrorBody } from './errors.js';
+import { placeOrder, placeOrderInput, placeOrderOutput } from './place-order.js';
 import {
   addToCart,
   addToCartInput,
@@ -137,6 +138,21 @@ export function createMerchantServer(
       annotations: { readOnlyHint: false, idempotentHint: false },
     },
     (args) => run(() => getQuote(state, args)),
+  );
+
+  server.registerTool(
+    'place_order',
+    {
+      title: 'Place order',
+      description:
+        'Place an order against a quote, presenting a signed spending mandate. The amount and currency checked against the mandate are read from the stored quote, never from this call. Returns status "approved" when the mandate covers the purchase, or "awaiting_confirmation" with a confirmation_token when the amount is above the mandate\u2019s human-confirm threshold. Refuses with code "mandate_refused" and a reasons list naming every failed check, or with "quote_expired", "quote_stale", "quote_already_ordered" or "insufficient_stock". Nothing is paid here: confirm_order completes the payment.',
+      inputSchema: placeOrderInput,
+      outputSchema: placeOrderOutput,
+      // Not idempotent and not read-only: a second call with the same quote is
+      // refused rather than answered again (D64).
+      annotations: { readOnlyHint: false, idempotentHint: false },
+    },
+    (args) => run(() => placeOrder(state, args)),
   );
 
   return server;

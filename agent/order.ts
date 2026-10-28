@@ -1,26 +1,23 @@
 /**
- * The `place_order` step: the only place the agent spends money.
+ * The `place_order` step: the only place the agent presents its mandate.
  *
- * It is one function over the {@link ToolCaller} seam, in its own file, for
- * two reasons (D76).
+ * It is one function over the {@link ToolCaller} seam, in its own file (D76).
+ * Every other step reads a catalogue or moves a cart; this one presents a
+ * signed mandate and commits to a price. Code that can spend should be short
+ * enough to read in one sitting and reachable from one place.
  *
- * The first is temporary: `place_order` is T07a's tool and was not on main
- * when this was written, so the step is written against the agreed contract
- * and tested against a stub MCP server that implements it
- * (`test/agent/stub-server.ts`). Keeping it in one small file with one
- * dependency — a `ToolCaller` — means the end-to-end check T09 owns is a
- * change of argument, not a change of code.
- *
- * The second outlasts that. Every other step reads a catalogue or moves a
- * cart; this one presents a signed mandate and may cause a charge. Code that
- * can spend should be short enough to read in one sitting and reachable from
- * one place.
+ * It now runs against the real tool: `merchant/place-order.ts` shipped in
+ * T07a, and `test/agent/order.test.ts` drives this function against it as
+ * well as against a stub. Nothing is *paid* here — the merchant's own
+ * documentation is explicit that an approved order is approved and not paid,
+ * and the rail call belongs to T07b's `confirm_order`.
  *
  * ## The three answers
  *
  * `place_order` has three, and the type says so:
  *
- * - **approved** — the mandate covered it. The order is returned.
+ * - **approved** — the mandate covered it. The order is returned. The status
+ *   word is `approved`, from the merchant's `ORDER_STATUSES` (D62).
  * - **awaiting_confirmation** — the amount is above the mandate's
  *   `human_confirm_above_minor`, so the merchant is holding the order and has
  *   handed back a `confirmation_token`. **The agent stops here** (D74). It
@@ -49,12 +46,16 @@ export const PLACE_ORDER_TOOL = 'place_order';
 /** The status the merchant uses when it is holding an order for a human (D74). */
 export const AWAITING_CONFIRMATION = 'awaiting_confirmation';
 
+/** The status the merchant uses when the mandate covered the order (D62). */
+export const APPROVED = 'approved';
+
 /**
  * An order the merchant accepted.
  *
- * Only `order_id` and `status` are read, because only those two are in the
- * agreed contract; the whole body travels with them so a caller — and T09's
- * demo — can print whatever else the shipped tool returns (D77).
+ * `order_id` and `status` are what the shipped `placeOrderOutput` carries
+ * besides the confirmation token; the whole body travels with them so a
+ * caller — and T09's demo — can print anything T07b adds without this file
+ * changing (D77).
  */
 export interface PlacedOrder {
   readonly order_id: string;
@@ -89,19 +90,17 @@ const heldSchema = z.object({
   order_id: z.string(),
 });
 
-/** The approved-order body. */
+/**
+ * The approved-order body.
+ *
+ * `status` is read as a plain string rather than the literal `approved`, so
+ * that T07b's paid path — whatever word it uses — arrives as an approved
+ * order carrying its own status rather than as an unreadable body.
+ */
 const approvedSchema = z.object({
   order_id: z.string(),
   status: z.string(),
 });
-
-/** Either shape, unwrapped from an `{ order: ... }` envelope if there is one. */
-function unwrap(body: Record<string, unknown>): Record<string, unknown> {
-  const inner = body['order'];
-  return typeof inner === 'object' && inner !== null && !Array.isArray(inner)
-    ? (inner as Record<string, unknown>)
-    : body;
-}
 
 /**
  * Calls `place_order` with the quote, the agent id and the mandate.
@@ -129,7 +128,7 @@ export async function placeOrder(
     return { status: 'refused', refusal: outcome.refusal };
   }
 
-  const body = unwrap(outcome.body);
+  const body = outcome.body;
 
   const held = heldSchema.safeParse(body);
   if (held.success) {

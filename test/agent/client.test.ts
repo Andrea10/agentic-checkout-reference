@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 
 import { AGENT_CLIENT_INFO } from '../../agent/index.js';
 import { SERVER_INFO, createMerchantServer } from '../../merchant/index.js';
-import { connectInMemory } from './harness.js';
+import { MERCHANT_TOOL_NAMES, connectInMemory } from './harness.js';
 
 describe('connecting in process', () => {
   it('serves the 2025-era handshake when the server is mounted without serveStdio', async () => {
@@ -41,16 +41,10 @@ describe('connecting in process', () => {
     await merchant.close();
   });
 
-  it('lists the tool names, sorted', async () => {
+  it('lists all six tool names, sorted', async () => {
     const merchant = await connectInMemory(createMerchantServer());
 
-    expect(await merchant.listToolNames()).toEqual([
-      'add_to_cart',
-      'create_cart',
-      'get_product',
-      'get_quote',
-      'list_products',
-    ]);
+    expect(await merchant.listToolNames()).toEqual(MERCHANT_TOOL_NAMES);
     await merchant.close();
   });
 });
@@ -98,9 +92,41 @@ describe('callTool', () => {
   });
 
   it('throws for a tool the merchant does not have (D73)', async () => {
+    // `place_order` used to stand in here, before T07a shipped it.
+    // `confirm_order` is T07b's and is genuinely not on main yet, which is
+    // the condition this test is about: a missing tool is not a refusal.
     const merchant = await connectInMemory(createMerchantServer());
 
-    await expect(merchant.callTool('place_order', {})).rejects.toThrow(/place_order/);
+    await expect(merchant.callTool('confirm_order', {})).rejects.toThrow(/confirm_order/);
+    await merchant.close();
+  });
+
+  it('refuses place_order on an unconfigured merchant, rather than throwing', async () => {
+    // The default `createMerchantServer()` has no issuer key, so it serves
+    // the tool and refuses the order (D60). A refusal, not a throw (D73).
+    const merchant = await connectInMemory(createMerchantServer());
+
+    const outcome = await merchant.callTool('place_order', {
+      quote_id: 'quote_000001',
+      agent: 'agent-buyer-1',
+      mandate: {
+        mandate_id: '11111111-2222-4333-8444-555555555555',
+        principal: 'user-andrea',
+        agent: 'agent-buyer-1',
+        merchant: 'merchant-demo',
+        currency: 'GBP',
+        amount_cap_minor: 5000,
+        per_transaction_cap_minor: 2500,
+        valid_from: '2026-10-25T00:00:00Z',
+        valid_until: '2026-10-30T00:00:00Z',
+        human_confirm_above_minor: 2000,
+        signature: 'not-checked-because-there-is-no-key',
+      },
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.refusal.code).toBe('merchant_misconfigured');
     await merchant.close();
   });
 

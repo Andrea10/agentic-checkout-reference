@@ -1,32 +1,39 @@
 /**
- * A test-local stub MCP server that registers `place_order`.
+ * A test-local MCP server that answers `place_order` with whatever a test
+ * says, including bodies the shipped merchant cannot produce.
  *
- * `place_order` is T07a's tool and was not on main when T08 was written, so
- * the agent's order step (`agent/order.ts`) is tested against this stub
- * instead. The stub is deliberately thin: it does no mandate checking of its
- * own. Its whole job is to answer the three shapes the agreed contract
- * defines, from arguments the test chooses, and to record what it was called
- * with so the test can assert the agent sent the right thing:
+ * When T08 was first written this stub stood in for `place_order` entirely,
+ * because T07a was not on main. It has shipped, and `order.test.ts` now
+ * drives the agent's order step against the **real** tool for all three of
+ * its answers — approved, awaiting_confirmation, and a refusal carrying
+ * several reasons. So the stub has lost its original job.
  *
- *     input   { quote_id: string, agent: string, mandate: Mandate }
- *     output  an approved order
- *          |  { status: 'awaiting_confirmation', confirmation_token, order_id }
- *          |  a structured tool error listing the policy refusal reasons
+ * It is kept, much smaller, for the one thing the real merchant cannot do:
+ * **answer with a body the merchant on main never sends.** Two of those
+ * matter to the agent:
  *
- * The refusal body is built from `mandate/decision.ts`'s `PolicyRefusal`
- * shape and the merchant's `{ error: { code, message } }` envelope (D13), so
- * the field names here are the ones T07a is expected to ship. The agent reads
- * them tolerantly either way (see `agent/refusal.ts`); T09 is where this gets
- * checked against the real tool.
+ * - an approved order whose status word is not `approved` — T07b's paid path,
+ *   which the agent must carry through rather than reject (see
+ *   `agent/order.ts`'s `approvedSchema`);
+ * - a success body that is neither of the two documented shapes, which must
+ *   throw rather than become a refusal (D73).
  *
- * This file lives in `test/agent/` and is never shipped. Nothing in
- * `merchant/` was touched to build it.
+ * Both are claims about how the agent treats a merchant it was not compiled
+ * against, and neither can be made against a merchant that is behaving.
+ *
+ * The input schema is the merchant's own `mandateWireSchema`, imported rather
+ * than copied: this file exists to imitate the merchant, so sharing its wire
+ * schema is the point — a field added to a mandate reaches this stub without
+ * anyone remembering to update it. (The agent deliberately does the opposite;
+ * see D77.) Nothing in `merchant/` was touched to build this.
  */
 
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
 
-import type { Mandate, PolicyRefusal } from '../../mandate/index.js';
+import { mandateWireSchema } from '../../merchant/index.js';
+
+import type { Mandate } from '../../mandate/index.js';
 
 /** Name and version the stub reports, so a test cannot mistake it for the merchant. */
 export const STUB_SERVER_INFO = {
@@ -41,36 +48,18 @@ export interface RecordedCall {
   readonly mandate: Mandate;
 }
 
-/** One of the three answers the stub can give, chosen per quote id. */
-export type StubResponse =
-  | {
-      readonly kind: 'approved';
-      readonly order_id: string;
-      /** Defaults to `paid`. */
-      readonly status?: string;
-      readonly total_minor?: number;
-    }
-  | {
-      readonly kind: 'awaiting_confirmation';
-      readonly order_id: string;
-      readonly confirmation_token: string;
-    }
-  | {
-      readonly kind: 'refused';
-      readonly code: string;
-      readonly message: string;
-      readonly refusals?: readonly PolicyRefusal[];
-    };
+/** A body to answer with, and whether it is a refusal. */
+export interface StubAnswer {
+  /** The JSON body, verbatim. */
+  readonly body: unknown;
+  /** `true` to answer as a refused tool call. Defaults to `false`. */
+  readonly isError?: boolean;
+}
 
 /** How to build the stub. */
 export interface StubOptions {
-  /** Answer keyed by `quote_id`. */
-  readonly responses: Readonly<Record<string, StubResponse>>;
-  /**
-   * The answer for a `quote_id` that is not in {@link responses}. Defaults to
-   * a `quote_not_found` refusal, which is what the real merchant does.
-   */
-  readonly fallback?: StubResponse;
+  /** The answer for every call. */
+  readonly answer: StubAnswer;
 }
 
 /** The stub, plus the log of what it was asked. */
@@ -80,63 +69,18 @@ export interface StubOrderServer {
   readonly calls: readonly RecordedCall[];
 }
 
+/**
+ * The input schema, built from the merchant's own mandate schema.
+ *
+ * `quote_id` and `agent` are restated because they are two strings; the
+ * mandate is not, because it is eleven fields the merchant already describes
+ * and T03 signs every one of them.
+ */
 const placeOrderInput = z.object({
   quote_id: z.string(),
   agent: z.string(),
-  // The mandate travels whole. The stub does not verify it (that is T07a's
-  // job through `mandate.checkMandate`); it only checks that it arrived.
-  mandate: z.looseObject({
-    mandate_id: z.string(),
-    agent: z.string(),
-    merchant: z.string(),
-    currency: z.string(),
-    amount_cap_minor: z.int(),
-    per_transaction_cap_minor: z.int(),
-    valid_from: z.string(),
-    valid_until: z.string(),
-    human_confirm_above_minor: z.int(),
-    signature: z.string(),
-  }),
+  mandate: mandateWireSchema,
 });
-
-/** Shapes one {@link StubResponse} as an MCP tool result. */
-function resultFor(response: StubResponse): CallToolResult {
-  if (response.kind === 'refused') {
-    const body = {
-      error: {
-        code: response.code,
-        message: response.message,
-        ...(response.refusals === undefined ? {} : { refusals: response.refusals }),
-      },
-    };
-    return { content: [{ type: 'text', text: JSON.stringify(body) }], isError: true };
-  }
-
-  const body =
-    response.kind === 'awaiting_confirmation'
-      ? {
-          order_id: response.order_id,
-          status: 'awaiting_confirmation',
-          confirmation_token: response.confirmation_token,
-        }
-      : {
-          order_id: response.order_id,
-          status: response.status ?? 'paid',
-          ...(response.total_minor === undefined ? {} : { total_minor: response.total_minor }),
-        };
-
-  return {
-    content: [{ type: 'text', text: JSON.stringify(body) }],
-    structuredContent: body,
-  };
-}
-
-/** The default answer for an unknown quote: what the real merchant would say. */
-const QUOTE_NOT_FOUND: StubResponse = {
-  kind: 'refused',
-  code: 'quote_not_found',
-  message: 'no quote with that id',
-};
 
 /** Builds a stub server that answers `place_order` and nothing else. */
 export function createStubOrderServer(options: StubOptions): StubOrderServer {
@@ -148,17 +92,23 @@ export function createStubOrderServer(options: StubOptions): StubOrderServer {
     {
       title: 'Place order (stub)',
       description:
-        'Stub of T07a’s place_order: takes a quote_id, an agent id and a mandate, and answers with a fixed outcome chosen by the test.',
+        'Stub of place_order: records the call and answers with the body the test chose, including bodies the real merchant never sends.',
       inputSchema: placeOrderInput,
       annotations: { readOnlyHint: false, idempotentHint: false },
     },
-    (args) => {
+    (args): CallToolResult => {
       calls.push({
         quote_id: args.quote_id,
         agent: args.agent,
-        mandate: args.mandate as unknown as Mandate,
+        // No cast: the merchant's own `mandateWireSchema` already parses to
+        // a `Mandate`, which is the alignment this import buys.
+        mandate: args.mandate,
       });
-      return resultFor(options.responses[args.quote_id] ?? options.fallback ?? QUOTE_NOT_FOUND);
+
+      const text = JSON.stringify(options.answer.body);
+      return options.answer.isError === true
+        ? { content: [{ type: 'text', text }], isError: true }
+        : { content: [{ type: 'text', text }] };
     },
   );
 

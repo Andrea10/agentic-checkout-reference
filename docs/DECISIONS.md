@@ -1087,6 +1087,307 @@ opened and read on 28 Oct 2026, with the facts they settled:
 
 ---
 
+## T07a · Merchant place_order with mandate
+
+D60 to D69 are T07a's. All are **PROPOSED**: Andrea has not ruled on them.
+
+The contract `place_order` is built to — input `{ quote_id, agent, mandate }`,
+the merchant's own id as configuration, the amount and currency read from the
+quote, `awaiting_confirmation` plus a `confirmation_token` above the
+human-confirm threshold, and a structured error carrying every policy reason —
+was fixed in the task brief, because T08's buyer agent is being written against
+it in parallel. The decisions below are the choices that brief left open.
+
+## D60 · The merchant's own id and its trusted issuer are configuration, read from the environment — PROPOSED
+
+- **Decision.** `merchant/config.ts` reads two variables: `ACR_MERCHANT_ID`
+  (default `merchant-demo`) and `ACR_MANDATE_PUBLIC_KEY`, the issuer's Ed25519
+  public key in the form `exportPublicKey()` writes (DER SPKI, base64url,
+  unpadded — D24). `MerchantState` carries both as `merchant_id` and `policy`,
+  and `merchant/stdio.ts` reads the environment once at startup. A key that
+  cannot be read throws there and then. A merchant started with no key still
+  serves its catalogue, carts and quotes, and refuses `place_order` with the
+  new code `merchant_misconfigured`. `createMerchantState()` now takes an
+  options object instead of three positional arguments, because T07a added a
+  third store and two pieces of configuration.
+- **Alternative.** Take the merchant id, or the public key, as arguments to
+  `place_order` — which is what every other identifier in this merchant does
+  (`cart_id`, `quote_id`) and would have needed no new file. Or put the key in
+  a file the merchant reads, or generate a key pair at startup and have the
+  issuer ask the merchant for it.
+- **Why.** Both facts have to be outside the caller's reach or the checks that
+  use them are theatre. If the agent supplied the merchant id,
+  `merchant_mismatch` could never fire: the agent would echo whatever its
+  mandate says. If it supplied the public key, `signature_invalid` could never
+  fire: it would sign a mandate itself and hand over the matching key. The
+  environment rather than a file because T09's demo issues the mandate, exports
+  the public key and spawns the server in one process, and because a public key
+  is not a secret — nothing secret is read here and no key is ever logged.
+  Serving the catalogue without a key, rather than refusing to start, keeps
+  T08 able to browse a merchant it cannot buy from.
+- **Cost.** The merchant's identity now lives in two places — a default in the
+  code and a variable in the environment — and a demo that forgets the variable
+  gets a merchant that looks healthy until the order is placed. There is one
+  trusted issuer, not a list and no key rotation, so a second issuer means a
+  second server. The policy is built per server instance, which means a spend
+  ledger and an audit log per stdio connection: D44's cost, one level finer.
+  And `createMerchantState`'s signature changed, so anything written against
+  the positional form (one test) had to move.
+
+## D61 · The agent id is a caller-supplied argument, and is not authenticated — PROPOSED
+
+- **Decision.** `place_order` takes `agent` as a string argument and passes it
+  to `checkMandate()` as the agent making the purchase. The merchant does
+  nothing to establish that the caller is that agent.
+- **Alternative.** Derive the agent from the transport — MCP's authorisation
+  framework, an mTLS client certificate, an API key per agent — and refuse any
+  `agent` argument at all. Or drop the argument and read the agent off the
+  mandate, treating the mandate as proof of who is calling.
+- **Why.** The argument is in the contract T08 is being built against, and
+  Stage 1 has no notion of an authenticated caller: a stdio server's client is
+  whoever spawned the process. Reading the agent off the mandate instead would
+  be worse than useless — `agent_mismatch` could then never fire, because the
+  mandate would be compared with itself. Taking it as an argument at least
+  keeps the comparison honest and makes the gap visible in the tool's schema.
+- **Cost.** **This is the weakest link in the authorisation story.** Any caller
+  that holds a mandate can present itself as the agent that mandate names, so
+  `agent_mismatch` catches an honest misconfiguration and nothing else: it is
+  not a defence against a stolen mandate. The mandate's signature binds the
+  agent's *name*, but nothing binds the caller to that name — there is no
+  agent key, no challenge, no proof of possession. A real deployment needs the
+  agent to authenticate and the merchant to derive the id from that
+  authentication, at which point the argument disappears. It is said out loud
+  here and in the tool's own schema, where the `agent` argument's description
+  names the gap, rather than left for a reader to notice; T10 should carry it
+  into `docs/ARCHITECTURE.md` as a stated limitation of Stage 1.
+
+## D62 · The approved status word is `approved`, and the success body is two fields — PROPOSED
+
+- **Decision.** An order the mandate covers comes back as
+  `{ status: 'approved', order_id }`, and one above the threshold as
+  `{ status: 'awaiting_confirmation', order_id, confirmation_token }`. Nothing
+  else is on the wire. The advertised `outputSchema` is one object with
+  `status`, `order_id` and an optional `confirmation_token`, not a union.
+- **Alternative.** `authorised`, which is what a payments reader might expect;
+  `pending_payment`; or ACP's checkout statuses, which include
+  `pending_approval` for the held case and `complete_in_progress` for the
+  approved one (D37's cost anticipated using `pending_approval` here). For the
+  body: return the whole order, with the amount, the currency and the lines.
+- **Why.** `authorised` is the one word this status must not use: authorisation
+  is what the rail does to money, and the rail has not been called — T07b calls
+  it. `approved` says what happened (the merchant and the mandate agreed) and
+  not what has not. ACP's statuses were rejected because they describe a
+  *checkout session* being filled in, not an order, and because the contract
+  fixes `awaiting_confirmation`, which is not an ACP token: one ACP word beside
+  one of ours would read as conformance where there is none. The body stays at
+  two fields because the agent already has the price from the quote, and a
+  second copy of it in the order response is a second place for the two to
+  disagree. One object rather than a union because `outputSchema` is advertised
+  as JSON Schema and has to describe an object; the union lives on the stored
+  `Order` type, where the compiler can keep a token off an approved order.
+- **Cost.** `approved` is our word, not a standard's, so the demo and the docs
+  have to explain the three-state life of an order (approved, then paid, or
+  held then paid) that no specification names. An agent that has lost the quote
+  cannot read the amount back off the order: there is no `get_order` tool, and
+  T07b will want one. And a client that validates `confirmation_token` as
+  required on the awaiting path has to read `status` first, because the
+  advertised schema only says the field is optional.
+
+## D63 · Orders are held server-side, and the confirmation token is not the order id — PROPOSED
+
+- **Decision.** An `OrderStore` holds orders in the server process, mirroring
+  `CartStore` and `QuoteStore`: random `order_<uuid>` ids by default,
+  `sequentialOrderIds()` injectable for tests and the T09 demo. The
+  confirmation token is a separate value from a separate injectable factory,
+  `confirm_<uuid>` by default, kept server-side and indexed so T07b can find
+  the held order by token. Orders are frozen on the way in.
+- **Alternative.** Use the order id as the confirmation token, since both are
+  unguessable UUIDs and the order is the thing being confirmed. Or hold no
+  order at all for the approved case and only remember the held ones.
+- **Why.** The two values do different jobs: an order id is a *name*, which
+  will appear in logs, in the demo transcript and in the rail's `order_ref`
+  (D56), while the confirmation token is a *capability* — whoever holds it can
+  complete the purchase. Giving one value both jobs means anything that learns
+  the name can exercise the capability, which is the mistake a reference
+  implementation should not teach. Recording approved orders as well as held
+  ones is what makes a quote single use (D64) and gives T07b something to turn
+  into a payment.
+- **Cost.** A third in-memory store with the same costs as the first two:
+  orders die with the process, nothing is evicted, and a horizontally scaled
+  merchant would need a real one. Two id factories to inject instead of one, so
+  a deterministic demo transcript now takes four. The token has no expiry — a
+  held order waits for a human forever — and there is no way to cancel one;
+  T07b or T12 should give it a lifetime.
+
+## D64 · A quote is single use; the cart is left alone — PROPOSED
+
+- **Decision.** The order store indexes orders by `quote_id`, and
+  `place_order` refuses a second order against a quote that already has one —
+  including one still awaiting confirmation — with the new code
+  `quote_already_ordered`. A refused order creates nothing, so a quote whose
+  order was refused can be used again once the mandate is fixed. The cart is
+  not changed at all: not emptied, not closed, and no stock is decremented
+  (D17).
+- **Alternative.** Let a quote be ordered repeatedly, and rely on the mandate's
+  caps to bound the damage. Or close the cart when an order is placed, so that
+  the cart, not the quote, is the thing that is used up. Or delete the quote on
+  use, so a second attempt reads `quote_not_found`.
+- **Why.** A quote is a priced promise for one purchase, and the double-submit
+  is the oldest failure in checkout: without this, an agent that retried a
+  timed-out call would buy twice. Held orders have to count too, or an agent
+  could collect confirmation tokens for one quote until a human said yes to one
+  of them. Keeping the quote and naming it in the refusal, rather than deleting
+  it, follows D39's reasoning: the refusal should say what happened, not that
+  the id is unknown. The cart is left alone because re-quoting a cart is
+  legitimate — a person may well buy two of the same thing — and because
+  closing carts is machinery D17 already declined to build for stock.
+- **Cost.** The guard is per quote and not per cart, so an agent can re-quote
+  the same cart and order it again: only the mandate's caps and budget stand
+  between it and buying the same basket twice. That is deliberate, but it means
+  "single use" is a narrower promise than it sounds, and **this is the entry I
+  would most like overruled if you read it the other way.** A quote whose held
+  order is abandoned is also stuck forever — there is no release path — so the
+  agent must change the cart and re-quote. And an order refused by the policy
+  leaves the quote free, which is right for a mistyped mandate and is also a
+  small retry oracle.
+
+## D65 · The mandate check is the last gate, so refusals before it leave no audit entry — PROPOSED
+
+- **Decision.** `place_order` runs its checks in this order: the merchant is
+  configured, the quote is current (D38), the quote is unused (D64), the stock
+  is still there (D17), and only then `checkMandate()`. Anything refused before
+  the last step is refused without a policy check and therefore without an
+  audit entry. The task's definition of done asks for "one entry per
+  `place_order` call"; what is implemented is one entry per call that reaches
+  the mandate check, and the tests assert both halves — three calls that reach
+  it leave three entries, a call refused for an unknown quote or missing stock
+  leaves none.
+- **Alternative.** Check the mandate first, so that every `place_order` call
+  appears in the audit log whatever else is wrong with it. Or log the
+  non-policy refusals to the audit log too, widening `AuditEntry` with a kind.
+- **Why.** The audit log answers "why was this purchase allowed, or refused,
+  and by which rule?" (`mandate/audit.ts`). An `allow` entry written for an
+  order that was then refused for want of stock would be a lie told to the one
+  reader who matters: it records a purchase the merchant allowed and did not
+  make. Checking the mandate last also keeps the money question behind the
+  cheap questions, and means a sold-out catalogue line does not become an
+  opportunity to probe a mandate.
+- **Cost.** An order refused for a stale quote or missing stock leaves no trace
+  anywhere: the merchant has no request log of its own, so those attempts are
+  invisible after the call returns. D48 already decided the log records checks
+  rather than settlements, and this is the same boundary seen from the other
+  side. If Andrea wants the literal reading of the DoD — every call logged —
+  the fix is D48's widening, an entry kind on `AuditEntry`, and it should be
+  T07b's or T10's, not a second log here.
+
+## D66 · The refusal envelope carries the policy reasons, in a list, under the existing shape — PROPOSED
+
+- **Decision.** `MandateRefusedError extends MerchantError` with code
+  `mandate_refused`, and `toErrorBody()` adds a `reasons` array to D13's body:
+  `{"error":{"code":"mandate_refused","message":"…","reasons":[{"reason","message"},…]}}`.
+  The reasons are the mandate layer's own `PolicyRefusal` objects, passed
+  through unchanged and in check order. The message names every reason code, so
+  a person reading a transcript sees the whole answer in one line. Everything
+  else about D13 is unchanged: `isError: true`, one text block, no
+  `structuredContent`.
+- **Alternative.** A list of reason codes only, without the messages. Or one
+  merchant error code per policy reason — `mandate_expired`,
+  `budget_exceeded` and nine more in `MerchantErrorCode` — which would have
+  needed no new field. Or a second error envelope for mandate refusals.
+- **Why.** D42 decided that every failed check is reported at once; an envelope
+  that carried only the first would throw that away at the last step, and one
+  code per reason cannot express two failures in one answer at all. The
+  messages travel with the codes because the policy writes them for exactly
+  this reader and they carry the specifics a code cannot ("1450 is more than
+  the 1000 GBP left of this mandate's total cap of 1000"). Keeping D13's shape
+  means an agent still learns one failure envelope, as D13 intended.
+- **Cost.** `MerchantErrorBody` now has a field that is present on one code
+  only, so a client that reads `reasons` unconditionally gets `undefined`
+  everywhere else. The merchant's vocabulary and the mandate's are now mixed in
+  one body — `mandate_refused` is the merchant's word, `budget_exceeded` the
+  mandate's — and a reader has to know that the inner list comes from another
+  package. A refusal also now quotes the mandate's own limits back to the
+  caller in those messages, which D42's cost already accepted for a correctly
+  signed mandate.
+
+## D67 · The mandate's wire schema describes shape, not validity — PROPOSED
+
+- **Decision.** `merchant/mandate-wire.ts` describes the mandate argument with
+  zod as strings and plain `number`s: no `int()`, no datetime format, no
+  minimum. It is a `looseObject`, so unknown fields are passed through rather
+  than stripped. Validity is the policy's business, and only the policy's.
+- **Alternative.** Describe the mandate properly: `z.int()` on the money
+  fields, ISO-8601 validation on the window, `z.strictObject` to reject
+  anything unexpected. The SDK would then refuse a malformed mandate before the
+  handler ever ran.
+- **Why.** Two things would break. First, the refusals would move: a fractional
+  cap or an unreadable window would come back as an SDK protocol error — no
+  reason code, no audit entry, and the merchant's own policy never consulted —
+  and `mandate_limits_invalid` and `mandate_window_invalid` would become
+  unreachable through the server, which is most of what D47 exists to do.
+  Second, zod's `object` strips unknown keys, and T03 signs *every field
+  present*: a field added to a mandate after it was signed has to reach
+  `verify()` to break the signature, and a schema that quietly removed it first
+  would hand the policy a mandate that verifies. T12's tampering suite depends
+  on this; a test here already pins it.
+- **Cost.** The advertised JSON Schema is looser than the mandate's real rules,
+  so a client that reads the schema alone learns less than it could, and a
+  mandate with a string where a number belongs is refused by zod with a
+  protocol error rather than by the policy. The policy's reason codes are the
+  real contract, which means the tool's description has to point at them. And
+  `additionalProperties` is open on the mandate object, so a client generator
+  will produce a permissive type.
+
+## D68 · `amount_invalid` is unreachable through `place_order`, and is left unreached — PROPOSED
+
+- **Decision.** No test fakes an invalid amount through the server. A comment
+  in `test/merchant/place-order.test.ts` states why the reason cannot be
+  reached, and a test pins the invariant that makes the statement true: every
+  quote this merchant issues totals a positive safe integer.
+- **Alternative.** Reach it by force — a quote object written straight into the
+  store with a total of zero or 14.5, or a stubbed `totalOf` — so that the
+  refusal matrix is visibly complete. Or add a defensive check in
+  `place_order` that refuses a non-positive total before the policy sees it.
+- **Why.** The amount comes from the stored quote, never from the caller (the
+  contract, and D39's reasoning), and a quote is only ever issued for a cart
+  with at least one line (D37), where every line has a whole quantity of at
+  least one (D19) at an integer unit price (D16). So the total is always a
+  positive integer. A test that reached the refusal by building an impossible
+  quote would assert that the policy works — which `test/mandate/policy.test.ts`
+  already does, where the amount can be anything — while implying the merchant
+  has a path it does not have. A defensive check would be dead code with a dead
+  test attached.
+- **Cost.** The refusal matrix for `place_order` has a hole in it, and a reader
+  counting reason codes will find eleven tested out of twelve; the comment is
+  the only thing that explains the twelfth. If a later task introduces a
+  zero-priced line, a discount that cancels a cart out, or a quote built from
+  something other than a cart, the invariant goes and nothing in `place_order`
+  would catch it — only the invariant test, which is why it exists.
+
+## D69 · The audit log is reachable from the server state, and from no tool — PROPOSED
+
+- **Decision.** The policy lives on `MerchantState`, so `state.policy?.audit`
+  is reachable by anything holding the state — T09's demo prints it with
+  `print(process.stderr)` (D46). No MCP tool exposes it, and nothing in the
+  merchant writes it anywhere.
+- **Alternative.** A `get_audit_log` tool, so an agent could read back why it
+  was refused. Or keep the log out of the state entirely and have the demo hold
+  its own `AuditLog` and pass it into the policy it builds.
+- **Why.** The demo has to print the log — it is most of what the demo is for —
+  and threading a second handle through when the policy already carries one is
+  ceremony. A tool is a different matter: the log holds every decision the
+  server has made, including other mandates' and other agents', and D42's cost
+  already notes that an accumulated refusal is a generous oracle for someone
+  probing a mandate. A readable log would be a better one, and the party asking
+  is the party the mandate exists to bound.
+- **Cost.** Anything in the server process can read every decision, so the
+  isolation is process-level and nothing finer; a multi-tenant merchant would
+  need a log per principal and a reader that filters. An agent cannot read back
+  why it was refused except from the refusal it was given, which is deliberate
+  but means the refusal body has to be good enough on its own (D66). And the
+  log is reached through an optional field, so a caller writes `policy?.audit`
+  and has to consider the unconfigured merchant (D60).
+
 D70 to D79 are T08's, the buyer agent. All PROPOSED.
 
 ## D70 · The planner decides, the runner calls, and neither can do the other's job — PROPOSED
@@ -1343,3 +1644,130 @@ D70 to D79 are T08's, the buyer agent. All PROPOSED.
   refusal for it, where a clock would have let it re-quote first. That is a
   round trip, and T09 or T12 may want it; the fix is a `ProductChoice`-shaped
   injection of a clock into the planner, not a `Date.now()` in the runner.
+
+---
+
+## T08 round 2 · what `place_order` landing changed in D70 to D79 — PROPOSED
+
+T07a merged while T08 was in review. This section records what that changed
+in T08's own entries above. It is an **addendum, not an edit**: `D70` to `D79`
+is the whole of T08's allotted range and every number in it is spent, so there
+was no number left to take, and this file is append-only. Nothing above has
+been altered — read each entry below as amending the one it names. Andrea may
+rule on this section together with the entries it touches, or fold it into
+them when T10 consolidates.
+
+### Amends D76 · the stub is no longer standing in for the tool
+
+D76 was written when `place_order` was not on main, and its reasoning leaned
+on that: the agent's order step ran against a stub, and `flow.test.ts` drove
+"the real merchant for all five shipped tools" with the sixth routed
+elsewhere. Both halves of that are now out of date.
+
+- `flow.test.ts` drives **all six** of the merchant's tools, stub-free. The
+  plan runs end to end against the real policy check and the real order store.
+- `order.test.ts` drives the order step against the **real** tool for all
+  three of its answers, and pins the shipped combination: `approved` with an
+  `order_id` and no token; `awaiting_confirmation` with both; `mandate_refused`
+  with `error.reasons` naming every failed check. It also covers
+  `quote_already_ordered` (D64) and `merchant_misconfigured` (D60).
+- The seam D76 argued for held up, which is the part worth keeping: moving
+  from stub to real tool changed the test's **arguments**, not `agent/order.ts`.
+  The function was already written against a `ToolCaller`.
+
+The stub survives, much smaller, for the one job the real merchant cannot do:
+answering with a body a well-behaved merchant never sends. Two of those are
+claims about the agent and nothing else — an approved order whose status word
+is **not** `approved` (T07b's paid path, which the agent must carry through
+rather than reject), and a success body that is neither documented shape,
+which must throw rather than become a refusal (D73). Its input schema is now
+the merchant's own `mandateWireSchema`, imported rather than copied, so a
+field added to the mandate reaches the stub with nobody remembering to update
+it. That also deleted a cast: the merchant's schema already parses to a
+`Mandate`.
+
+**Cost.** A test helper now imports from `merchant/`, so a breaking change
+there breaks a test in `test/agent/`. That is the right direction for a file
+whose purpose is to imitate the merchant, and it is the opposite of what the
+agent itself does (D77) — a reader should not take the stub's import as
+licence for the agent to do the same.
+
+### Amends D76 and D77 · the refusal list is `error.reasons`, and only that
+
+D76's cost paragraph pointed at an UNVERIFIED note about which field
+`place_order` would use for the failed mandate checks. **It is `error.reasons`,
+and the note is withdrawn.** T07a's `MerchantErrorBody` declares it, D66 ruled
+it, and `toErrorBody` fills it only on `mandate_refused`.
+
+- **Decision.** `agent/refusal.ts` reads `error.reasons` and nothing else.
+- **Alternative.** Keep accepting `error.refusals` and a list of bare code
+  strings as well — the tolerance the first draft shipped, written before the
+  tool existed.
+- **Why.** The pre-review asked for a reason to keep the tolerance or to drop
+  it, and there is no good reason to keep it. `refusals` is a field no
+  merchant has ever sent: the tolerance was a guess, and the test that covered
+  it pinned fiction, which is worse than no test because it reads like
+  evidence. It also cost a reader something real — two alternative shapes to
+  rule out before learning the one that is true. D77's tolerance argument does
+  not reach this far: that argument is about **ignoring fields the agent does
+  not read**, which keeps working against a merchant that adds one, and says
+  nothing in favour of guessing at names for a field the agent *does* read.
+- **Cost.** If a future merchant names it something else, the agent reports
+  the refusal with its code and message and an empty reason list rather than
+  the reasons. That is a visible, debuggable loss of detail rather than a
+  silent one, and `refusal.test.ts` has a test asserting exactly this
+  behaviour for `refusals`, so the choice is recorded where it would be
+  rediscovered.
+
+### Amends D77 · money off the wire is read as `number`, not `int`
+
+- **Decision.** The money fields in `agent/wire.ts` are `z.number()`. Counts —
+  `quantity` and `cart_version` — stay `z.int()`.
+- **Alternative.** `z.int()` for money too, as the first draft had it and as
+  the merchant's own internal schemas use.
+- **Why.** D67 made this argument for the merchant's mandate schema and it
+  transfers unchanged to the agent's reader: a schema that enforces a rule
+  turns a breach of it into a parse failure. With `z.int()`, a merchant
+  quoting a fractional amount made the agent say *"`get_quote` returned a body
+  the agent cannot read"* and throw — losing the amount, the quote id and any
+  chance of reporting what actually happened. Whether an amount is a legal
+  integer of minor units is the mandate policy's call (`amount_invalid`, D58),
+  made against the merchant's own stored quote, and an agent re-deciding it
+  earlier and less well can only destroy information. Counts keep `int`
+  because they are not money and a fractional quantity is nothing the agent
+  could act on or report usefully.
+- **Cost.** The agent will carry a fractional price as far as `place_order`
+  and let the merchant refuse it, where the old code failed at the quote. One
+  more round trip, in exchange for a refusal that names the real problem.
+
+### Amends D70 · one call site for the merchant's stores
+
+T07a replaced `createMerchantState`'s positional arguments with an options
+object (D60). That change was caught by the compiler — three arguments where
+one was expected — and the three call sites in T08's tests were a hard build
+error, not a silent one.
+
+The silent failure was next door, and worth writing down because it bit this
+task once already. `CartStore` and `QuoteStore` take an **all-optional**
+options object, and in the first draft they were called positionally:
+`new CartStore(CATALOGUE, sequentialCartIds())`. A function satisfies an
+object type whose every property is optional, so that compiled, and the id
+factory was quietly dropped — the stores fell back to random UUIDs while the
+tests went on asserting nothing about the ids. It surfaced only because one
+test named `cart_000001` and failed. The pre-review flagged the same hazard
+for this round, which is the right instinct: the compiler cannot see a
+positional-to-options migration when every field is optional.
+
+So every construction now goes through one builder,
+`deterministicMerchant()` in `test/agent/harness.ts`, which sets the cart,
+quote, order and confirmation-token factories and a mandate policy on a
+frozen clock. Two tests assert `cart_000001`, `quote_000001` and
+`order_000001` by name, so a factory that stops arriving fails a test rather
+than silently weakening one.
+
+**Cost.** The agent suites share one merchant builder, so a test wanting a
+different merchant passes options rather than assembling stores itself. That
+is the trade D60 already made one level down. The general lesson is the part
+worth keeping: when an options object is entirely optional, the test that
+proves the options arrived has to assert on their **effect** — a named id —
+and never on the shape of the call.
