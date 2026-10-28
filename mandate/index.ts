@@ -22,6 +22,11 @@
  * `verify()` is the signature check and nothing more; `checkMandate()` is the
  * policy. They are separate calls (decision D40), and every call to the second
  * one lands in the audit log, pass or fail.
+ *
+ * The log holds a second kind of entry beside those decisions: what the rail
+ * then did about the money, appended by the merchant through
+ * `audit.recordSettlement()` (D94). A reader of one log therefore sees the
+ * decision and the payment it authorised, in order.
  */
 
 export { AuditLog, formatEntry } from './audit.js';
@@ -32,7 +37,18 @@ export { checkMandate, createMandatePolicy, recordSpend } from './policy.js';
 export { exportPublicKey, generateMandateKeyPair, importPublicKey, issue, verify } from './sign.js';
 export { SIGNATURE_FIELD } from './types.js';
 
-export type { AuditEntry, OutputStream } from './audit.js';
+export type {
+  AuditEntry,
+  AuditEntryKind,
+  AuditOutcome,
+  AuditRailCall,
+  MandateCheckEntry,
+  OutputStream,
+  SettlementDecline,
+  SettlementEntry,
+  SettlementOutcome,
+  SettlementRecord,
+} from './audit.js';
 export type { Clock } from './clock.js';
 export type {
   PolicyDecision,

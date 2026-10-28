@@ -475,6 +475,9 @@ describe('checkMandate writes every check to the audit log', () => {
 
     expect(policy.audit.entries()).toEqual([
       {
+        // A decision, as against the settlements the merchant appends to the
+        // same log (D94).
+        kind: 'mandate_check',
         at: NOW,
         mandate_id: claims.mandate_id,
         agent: AGENT,

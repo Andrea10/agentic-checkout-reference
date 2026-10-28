@@ -30,15 +30,18 @@ import {
   MERCHANT,
   MUG,
   MUG_PRICE,
+  checksOf,
   confirm,
   heldMandate,
   holdOrder,
   mandateFor,
   openMerchant,
   order,
+  outcomesOf,
   quoteFor,
   reasonsOf,
   refusalOf,
+  settlementsOf,
   successOf,
   type Merchant,
 } from './support/merchant-harness.js';
@@ -420,9 +423,7 @@ describe('confirm_order: the mandate is checked again (D83)', () => {
     // above the threshold, which is the whole reason this call exists. Reading
     // it as a refusal would make every held order unconfirmable.
     expect(successOf(await confirm(merchant, confirmation_token)).status).toBe('paid');
-    expect(
-      merchant.policy.audit.entries().map((entry) => entry.outcome),
-    ).toEqual(['confirm_required', 'confirm_required']);
+    expect(outcomesOf(merchant)).toEqual(['confirm_required', 'confirm_required', 'paid']);
   });
 
   it('refuses to complete anything at all with no issuer configured (D60)', async () => {
@@ -437,7 +438,7 @@ describe('confirm_order: the mandate is checked again (D83)', () => {
   });
 });
 
-describe('confirm_order: the audit log (D48, D65)', () => {
+describe('confirm_order: the audit log (D48, D65, D94)', () => {
   let merchant: Merchant;
 
   beforeEach(async () => {
@@ -458,13 +459,35 @@ describe('confirm_order: the audit log (D48, D65)', () => {
     await confirm(merchant, confirmation_token);
 
     // The unknown token and the already-paid order are refused before the
-    // gate, so neither is logged. Only the confirmation that got as far as the
-    // mandate adds an entry (D65).
-    expect(merchant.policy.audit.size).toBe(2);
-    expect(merchant.policy.audit.entries().map((entry) => entry.outcome)).toEqual([
+    // gate, so neither is logged: neither reached the mandate check (D65) and
+    // neither reached the rail (D99). Only the confirmation in the middle
+    // adds anything, and it adds two lines — its own re-check, and the
+    // payment that followed it (D94).
+    expect(checksOf(merchant)).toHaveLength(2);
+    expect(checksOf(merchant).map((entry) => entry.outcome)).toEqual([
       'confirm_required',
       'confirm_required',
     ]);
+    expect(outcomesOf(merchant)).toEqual([
+      'confirm_required',
+      'confirm_required',
+      'paid',
+    ]);
+  });
+
+  it('leaves no settlement entry for a confirmation refused before the rail (D99)', async () => {
+    const { confirmation_token } = await holdOrder(merchant);
+
+    // A lapsed hold is the clearest of the four pre-rail refusals: fifteen
+    // minutes is the window (D82), and nothing is asked of the rail after it.
+    merchant.advance(901);
+    expect(refusalOf(await confirm(merchant, confirmation_token)).code).toBe('order_expired');
+
+    // One entry, the hold's own check. The refusal is in the error body and
+    // nowhere else, which is D65's boundary seen from `confirm_order`: the log
+    // records mandate decisions and settlements, and this is neither.
+    expect(outcomesOf(merchant)).toEqual(['confirm_required']);
+    expect(settlementsOf(merchant)).toEqual([]);
   });
 
   it('records the confirmation under the same mandate, agent and amount as the hold', async () => {
@@ -472,7 +495,7 @@ describe('confirm_order: the audit log (D48, D65)', () => {
 
     merchant.advance(60);
     await confirm(merchant, confirmation_token);
-    const [hold, confirmation] = merchant.policy.audit.entries();
+    const [hold, confirmation] = checksOf(merchant);
 
     expect(confirmation?.mandate_id).toBe(hold?.mandate_id);
     expect(confirmation?.agent).toBe(AGENT);
@@ -484,25 +507,37 @@ describe('confirm_order: the audit log (D48, D65)', () => {
     expect(confirmation?.at).toBe('2026-10-28T12:01:00.000Z');
   });
 
-  it('says nothing about the payment, because the log records checks (D48)', async () => {
+  it('says why the payment failed, in the same log as the decisions (D86, D94)', async () => {
     const declining = await openMerchant({ rail: new ScriptedRail({ authorise: ISSUER_DECLINE }) });
     try {
       const { confirmation_token } = await holdOrder(declining);
       await confirm(declining, confirmation_token);
 
-      // Two `confirm_required` entries and not a word about the decline: a
-      // settlement is a different kind of event, and widening `AuditEntry`
-      // with a kind would mean changing `mandate/`, which is not T07b's to
-      // touch (D48's cost, named in D86). An auditor needs the audit log for
-      // the decisions, the rail's log for the payments and the ledger for what
-      // was actually spent.
-      expect(declining.policy.audit.entries().map((entry) => entry.outcome)).toEqual([
+      // **This test was the record of a gap, and now pins the fix.** On T07b
+      // the log read `confirm_required, confirm_required` and not a word about
+      // the decline: a settlement was a different kind of event and widening
+      // `AuditEntry` meant changing `mandate/`, which T07b was not allowed to
+      // touch (D48's cost, named in D86). Andrea ruled on 28 Oct that the gap
+      // is fixed rather than documented, so T07c widened the entry and the
+      // third line below is the one an auditor was missing: the card was
+      // refused, by the issuer, under this mandate, on this order.
+      expect(outcomesOf(declining)).toEqual([
         'confirm_required',
         'confirm_required',
+        'payment_declined',
       ]);
-      expect(declining.policy.audit.entries().every((entry) => entry.reasons.length === 0)).toBe(
-        true,
-      );
+      expect(checksOf(declining).every((entry) => entry.reasons.length === 0)).toBe(true);
+      expect(settlementsOf(declining)[0]).toMatchObject({
+        kind: 'settlement',
+        outcome: 'payment_declined',
+        order_id: 'order_000001',
+        mandate_id: MANDATE_ID,
+        amount_minor: MUG_PRICE,
+        decline: { code: 'insufficient_funds', origin: 'issuer' },
+      });
+      // The other two sources still say what they said: the ledger is
+      // untouched and the order is declined. What changed is that the audit
+      // log alone now answers "why was this purchase not made?".
       expect(declining.policy.ledger.spent(MANDATE_ID)).toBe(0);
       expect(declining.state.orders.get('order_000001')?.status).toBe('declined');
     } finally {

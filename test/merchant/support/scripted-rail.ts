@@ -35,6 +35,16 @@ export interface RailScript {
   readonly authorise?: RailFailure;
   /** Decline or throw on `capture`. Omit to let it succeed. */
   readonly capture?: RailFailure;
+  /**
+   * Capture *less* than was authorised.
+   *
+   * `StubRail` captures in full and always will (D52), so a rail that takes
+   * 1400 of a 1450 hold is the one thing nothing else in the repo can
+   * produce — and it is the case D87 turns on: the ledger has to record what
+   * the rail took, not what the policy checked. Omit it and the capture is in
+   * full, as everywhere else.
+   */
+  readonly captureAmount?: number;
   /** Hold this call open until {@link ScriptedRail.release} is called. */
   readonly pauseAt?: RailCall;
   /** Where the delegated stub's log entries go. */
@@ -100,7 +110,12 @@ export class ScriptedRail implements Rail {
     const scripted = this.#script.capture;
     if (scripted instanceof Error) throw scripted;
     if (scripted !== undefined) return { ok: false, decline: scripted };
-    return this.#inner.capture(request);
+
+    const result = await this.#inner.capture(request);
+    const taken = this.#script.captureAmount;
+    if (!result.ok || taken === undefined) return result;
+    // The hold stays what the stub granted; only the amount taken differs.
+    return { ok: true, capture: { ...result.capture, amount_minor: taken } };
   }
 
   async #pause(call: RailCall): Promise<void> {
