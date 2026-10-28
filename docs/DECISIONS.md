@@ -1084,3 +1084,262 @@ opened and read on 28 Oct 2026, with the facts they settled:
   authorisation is released after about seven days, and no cancel, because the
   interface has none by the PRD. T10 should say so, since a reader who knows
   payments will look for it.
+
+---
+
+D70 to D79 are T08's, the buyer agent. All PROPOSED.
+
+## D70 · The planner decides, the runner calls, and neither can do the other's job — PROPOSED
+
+- **Decision.** `agent/` has two halves with one interface between them.
+  `Planner.next(memory): PlanStep` is synchronous, pure, and returns a
+  *description* of a tool call. `runPlan()` in `agent/run.ts` owns the loop,
+  makes every call, and folds each answer back into the memory. A `Planner` is
+  handed no connection, no client and no credentials, so it cannot call a tool
+  even by accident; the runner is handed no shopping logic, so it cannot
+  decide what to buy.
+- **Alternative.** One object with the connection on it, deciding and calling
+  in the same method — the shape most agent examples use, and the shape
+  `runPlan` would collapse into if `next()` were allowed to be `async`.
+- **Why.** The interesting questions about an agentic checkout are decisions:
+  which product, how many, when to re-price, when to stop, and whether to
+  confirm its own order. With this seam those questions are answered by
+  calling a pure function with a literal — `test/agent/planner.test.ts` has
+  twenty-one such tests and starts no server, opens no transport and holds no
+  mandate. The reverse also holds: `test/agent/flow.test.ts` drives the runner
+  with a three-line planner to check the plumbing with no shopping logic in
+  the way. A reader who wants to see how the agent thinks reads one file,
+  `agent/scripted.ts`, which contains no `await` at all.
+- **Cost.** Two files and an interface where one class would do, and a step
+  type that has to be kept in step with the merchant's tool list by hand: add
+  a tool and both `PlanStep` and the runner's `switch` change. The memory also
+  has to carry everything a planner might want, so a planner that wanted to
+  see, say, the audit log would need `PlanMemory` widened rather than just
+  reaching for it.
+
+## D71 · A plan is a state machine over what came back, not a list of steps to replay — PROPOSED
+
+- **Decision.** `next()` takes the accumulated {@link PlanMemory} — products,
+  cart, quote — not a step index. `ScriptedPlanner` answers the first question
+  still open, so the order of the steps is fixed but each step is recomputed
+  from what the merchant actually said.
+- **Alternative.** A literal script: an array of six steps, replayed in order,
+  with the runner walking the index.
+- **Why.** Two things in this design make a tape wrong. A quote is good only
+  for the cart version it priced (D38), so a cart that moved under the agent
+  needs a fresh `get_quote` rather than an order against a stale price — the
+  merchant would refuse that order (`quote_stale`), and noticing first is the
+  difference between an agent that recovers and one that reports a failure.
+  And `add_to_cart` merges lines (D11), so what is in the cart after two adds
+  is not always what the agent asked for; comparing against the returned cart
+  catches a partly filled line, which counting its own adds would not.
+- **Cost.** The planner carries state logic, so its tests have to construct
+  memories rather than assert on a list, and a planner bug can loop. D73's
+  step budget is the answer to the second half of that.
+
+## D72 · The agent id and the mandate travel together, injected, and one step reads them — PROPOSED
+
+- **Decision.** `AgentIdentity { agent, mandate }` is handed to `runPlan()` by
+  whoever starts the agent. Nothing in `agent/` reads either from the
+  environment, from a file, or from a module-level variable, and the only code
+  that touches them is `agent/order.ts`. The agent id goes on the wire as its
+  own `place_order` argument as well as being inside the mandate's `agent`
+  claim.
+- **Alternative.** A module-level configured agent, or a `BuyerAgent` class
+  holding the mandate as a field available to every method.
+- **Why.** Three reasons, in order of weight. A mandate is a credential, and
+  code that can reach a credential from anywhere can leak it from anywhere;
+  here it is in scope in one file. The demo (T09) has to run the same agent
+  twice under two different mandates to show the human-confirm path, which is
+  a parameter, not a reconfiguration. And the duplication of the agent id is
+  deliberate: the mandate says who the authority was *granted to*, the
+  argument says who is *using it*, and the merchant's policy check compares
+  them — that comparison (`agent_mismatch`) is the check that stops one agent
+  presenting another's mandate, so an agent that filled the argument in from
+  the mandate it is holding would be answering the question for the verifier.
+  `test/agent/order.test.ts` asserts the two can differ.
+- **Cost.** Every caller has to build an identity, including the tests, and
+  there is no ambient default to fall back on. A caller that passes a mandate
+  for a different agent gets a refusal from the merchant rather than a local
+  error — which is correct, but it is a round trip to find out.
+
+## D73 · A refusal is a returned value; a broken connection still throws — PROPOSED
+
+- **Decision.** A tool answering `isError: true` becomes a `MerchantRefusal`
+  on the outcome: `callTool` returns `{ ok: false, refusal }`, and `runPlan`
+  stops at the first refusal and returns `{ kind: 'refused', step, refusal }`
+  naming the step that earned it. A broken connection, a tool the server does
+  not have, and a body the agent cannot parse all still throw.
+  `RunOptions.maxSteps` (default 24) bounds the loop and reports an overrun as
+  a `stopped` outcome with its reason.
+- **Alternative.** Throwing a typed `MerchantRefusalError`, which is what a
+  `try`/`catch` reader expects of a failed call.
+- **Why.** A refusal is not a failure. The connection worked, the request was
+  understood, and the mandate layer did the job this repository exists to
+  show — so it belongs in the return type, where the compiler makes the caller
+  handle it, rather than in an exception a caller can forget. The split is the
+  useful part: `refused` means the merchant decided something about this
+  purchase, and a throw means nobody decided anything. The step budget is
+  there because a planner is ordinary code that can have a bug, and an agent
+  with a mandate and an unbounded loop is an agent that spends until the cap
+  stops it.
+- **Cost.** Callers switch on `outcome.kind` rather than wrapping in `try`.
+  The two categories are also not perfectly clean: the SDK answers an
+  input-schema violation with `isError: true`, so an agent bug arrives as a
+  refusal rather than a throw. D78 names it `tool_error` so it at least does
+  not masquerade as a merchant refusal code.
+
+## D74 · On `awaiting_confirmation` the agent stops and hands back the token — PROPOSED
+
+- **Decision.** When `place_order` answers
+  `{ status: 'awaiting_confirmation', confirmation_token, order_id }`, the run
+  ends with `{ kind: 'awaiting_confirmation', held }`. The agent does not call
+  `confirm_order`, does not retry under a different quote, and does not
+  re-quote a smaller cart to get under the threshold. The token is returned to
+  whoever started the agent, and the decision is theirs.
+- **Alternative.** Hold the token and expose `confirm()` on the agent, or take
+  a callback the host supplies for the human's answer.
+- **Why.** `human_confirm_above_minor` exists so that a person says yes above
+  a figure the person chose. An agent that confirms its own order has removed
+  the control it was built to respect, and an agent that *can* confirm is one
+  mis-wired host away from doing so — so the capability is absent rather than
+  guarded. Retrying smaller would be worse: it is the agent deciding that the
+  user's threshold was really a suggestion.
+- **Cost.** The caller has to carry the token to `confirm_order` itself, and
+  the agent cannot complete a purchase in one call when the amount is above
+  the threshold — which is the behaviour, not a limitation. T09 holds the
+  token between the two halves of the demo.
+
+## D75 · The client negotiates the newest revision both ends know: 2026-07-28, verified — PROPOSED
+
+- **Decision.** The agent constructs its client with
+  `versionNegotiation: { mode: 'auto' }`, which probes with `server/discover`
+  before the handshake and falls back to the 2025-era `initialize` when the
+  server does not answer it. Nothing is pinned. The connection records what it
+  got — `MerchantConnection.protocolVersion` and `.protocolEra` — so a caller
+  reads the answer rather than assuming it.
+- **Alternative.** The SDK's default, `mode: 'legacy'`, which runs the 2025
+  handshake and never probes; or `{ pin: '2026-07-28' }`, which demands the
+  modern era and fails the connection without it.
+- **Why.** The repository claims to implement MCP revision 2026-07-28 (D09),
+  and until this task nothing had checked it: T06a could not add the client
+  package, so its tests drove the server with hand-written JSON-RPC and pinned
+  `2025-11-25`, and TASKS.md recorded the 2026-07-28 opening exchange as
+  UNVERIFIED. **It is now verified.** On
+  `@modelcontextprotocol/client` 2.4.0 against
+  `@modelcontextprotocol/server` 2.4.0, `test/agent/protocol.test.ts` spawns
+  the real `merchant/stdio.ts` over a pipe and the two ends settle on
+  **`2026-07-28`**, era `modern`, with `server/discover` reporting
+  `supportedVersions: ['2026-07-28']`. `auto` rather than a pin because a
+  reference client that refuses to talk to a 2025 server teaches the wrong
+  lesson about a protocol in transition, and the fallback is free.
+- **Cost.** One extra round trip on connect, and for the SDK's stdio transport
+  the probe runs in a disposable sibling process — so connecting spawns the
+  server command twice. There is a second, sharper cost worth writing down:
+  **the revision depends on how the server is mounted, not only on the SDK
+  version.** `serveStdio` owns the era decision for its connection and serves
+  the modern opening; an `McpServer` connected straight to a transport, which
+  is what the in-memory tests do, has no such entry point and serves
+  `2025-11-25` / `legacy`. Both are asserted (`protocol.test.ts` and
+  `client.test.ts`) so the difference is recorded rather than discovered. A
+  reader should not conclude from "SDK v2" that a connection is 2026-07-28.
+
+## D76 · `place_order` is one isolated function over the tool-calling seam — PROPOSED
+
+- **Decision.** `agent/order.ts` holds `placeOrder(caller, identity, quoteId)`
+  and nothing else. Its only dependency is a `ToolCaller`, so it runs against
+  anything that can call a tool. It is tested against a stub MCP server in
+  `test/agent/stub-server.ts` that registers `place_order` with the agreed
+  contract.
+- **Alternative.** Fold the call into the runner's `switch` with the other
+  five tools, and wait for T07a before testing any of it.
+- **Why.** The immediate reason is scheduling: `place_order` is T07a's tool
+  and was not on main when this was written, so isolating it means the real
+  end-to-end check T09 owns is a change of argument and not a change of code.
+  `test/agent/flow.test.ts` already runs the whole plan against the **real**
+  merchant for all five shipped tools and routes only `place_order` to the
+  stub, so the seam is load-bearing today rather than scaffolding. The reason
+  that outlasts T07a: every other step reads a catalogue or moves a cart, and
+  this one presents a signed mandate and may cause a charge. Code that can
+  spend should be short enough to read in one sitting and reachable from one
+  place.
+- **Cost.** `place_order` is the one tool whose argument shape lives in two
+  places — the step and the runner's terminal branch. The order and held-order
+  bodies are also read loosely: `order_id` and `status` are required and the
+  rest of the body travels unread, because the shipped shape is T07a's to fix.
+  See the UNVERIFIED note on the refusal field name in the PR.
+
+## D77 · The agent validates only the fields it reads, and type-checks the rest against the merchant — PROPOSED
+
+- **Decision.** `agent/wire.ts` declares its own zod schemas for the bodies
+  the agent reads, listing only the fields it uses and ignoring everything
+  else rather than rejecting it. It then imports the merchant's own types and
+  asserts, at compile time only, that each one is assignable to the agent's
+  shape (`MerchantShapesAreReadable`).
+- **Alternative.** Import the merchant's zod schemas and validate against them
+  whole — one definition, no duplication — or validate nothing and cast.
+- **Why.** A buyer agent in the world does not ship with the merchant's
+  source. It reads the fields it needs and tolerates whatever else arrives;
+  validating the merchant's whole object would make this agent break on a
+  merchant that *added* a field, which is exactly the coupling an
+  agentic-commerce protocol exists to remove. So the runtime check is the
+  agent's own and deliberately narrow. The compile-time assertion buys back
+  the thing duplication usually costs: if the merchant renames or retypes a
+  field the agent reads, `npm run build` fails in `agent/wire.ts` with the
+  field named, rather than a demo failing in front of a reader. Casting was
+  never on the table — the agent would then trust a body it never checked.
+- **Cost.** Two descriptions of the same wire shapes, which can drift in the
+  one direction the compiler cannot see: a field the merchant *adds* and the
+  agent should start reading will not announce itself. The assertion is also a
+  conditional type, which is a small piece of cleverness in a file otherwise
+  written to be read.
+
+## D78 · One `ToolCaller` seam, and a refusal that is not the envelope becomes `tool_error` — PROPOSED
+
+- **Decision.** Everything above `agent/client.ts` reaches the merchant
+  through one method, `callTool(name, args)`, returning a body or a refusal.
+  A refusal body that does not parse as `{ error: { code, message } }` — the
+  SDK's own input-schema rejection is a plain sentence — becomes the code
+  `tool_error` with that text as its message.
+- **Alternative.** A method per tool on the connection, typed to each tool's
+  arguments; and for the unparseable body, throwing, since it is not a
+  merchant refusal.
+- **Why.** The narrow seam is what makes the runner testable against a stub, a
+  router (`routeTools` puts two servers behind one caller) or a plain object,
+  and it means a plan step cannot reconnect, change the protocol revision or
+  reach another client's state — it can only call tools. Typing is not lost:
+  it moved to `agent/wire.ts`, where the body is parsed once per tool.
+  `tool_error` rather than a throw because the agent should report one shape of
+  "no" to its caller, and the SDK has already decided to deliver this one as
+  `isError: true`; a distinct code keeps it from masquerading as something the
+  merchant's `MerchantErrorCode` list contains.
+- **Cost.** `callTool` takes `Record<string, unknown>`, so a typo in an
+  argument name is caught by the merchant's input schema at runtime rather
+  than by the compiler. And `tool_error` lumps together an agent bug and
+  anything else that arrives off-envelope, so a caller reading only the code
+  cannot tell them apart — the message is the only distinguisher.
+
+## D79 · Everything in `agent/` is deterministic: no randomness, no clock reads — PROPOSED
+
+- **Decision.** No file under `agent/` calls `Math.random`, `Date.now`,
+  `new Date()` or `randomUUID`. Planners are pure functions of their memory.
+  Which products get bought is a `ProductChoice`, a pure function of the
+  listed catalogue; the default, `twoCheapest`, takes the two lowest-priced
+  products and breaks ties on product id. The only time the agent has the
+  current time, it is the merchant's `expires_at`, read off the quote.
+- **Alternative.** Inject a clock, as `mandate/` (D49) and `merchant/` do, and
+  use it to check the quote's expiry before ordering.
+- **Why.** An injected clock is right for a *verifier*, which has to decide
+  whether a window has closed. The agent is not the verifier: the merchant
+  re-checks the quote's expiry at order time and refuses `quote_expired`, so a
+  clock here would duplicate the check in the one place whose answer does not
+  count. Leaving it out buys an agent that produces byte-identical runs, which
+  is what lets `flow.test.ts` assert a cart total of 2045 pence rather than a
+  shape, and what will let T09's demo print the same transcript every time.
+  Ties are broken on product id because a sort that is not total is not
+  deterministic — two products at the same price must never swap places
+  between runs.
+- **Cost.** The agent will cheerfully present an expired quote and take a
+  refusal for it, where a clock would have let it re-quote first. That is a
+  round trip, and T09 or T12 may want it; the fix is a `ProductChoice`-shaped
+  injection of a clock into the planner, not a `Date.now()` in the runner.
