@@ -41,3 +41,4 @@ Ruling 26 Oct (Andrea OS, S133-9): `docs/DECISIONS.md` is append-only and allowe
 - T08 · `task/T08` · PR #15 · claimed 2026-10-28T11:43:34Z
 - T07b · `task/T07b` · PR #17 · claimed 2026-10-28T16:01:43Z
 - T07c · `task/T07c` · PR #20 · claimed 2026-10-28T20:18:30Z
+- T09 · `task/T09` · PR #21 · claimed 2026-10-28T20:27:49Z
