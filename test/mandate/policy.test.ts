@@ -103,8 +103,11 @@ describe('checkMandate, a purchase the mandate covers', () => {
     expect(check()).toMatchObject({ outcome: 'allow', remaining_budget_minor: 5000 });
   });
 
-  it('allows a zero amount, which is a non-negative integer', () => {
-    expect(check({ amount_minor: 0 }).outcome).toBe('allow');
+  it('allows one penny, the smallest purchase there is', () => {
+    expect(check({ amount_minor: 1 })).toMatchObject({
+      outcome: 'allow',
+      amount_minor: 1,
+    });
   });
 
   it('allows an amount exactly at the per-transaction cap', () => {
@@ -132,7 +135,7 @@ describe('checkMandate, a purchase the mandate covers', () => {
   );
 });
 
-describe('checkMandate, the amount has to be a whole number of minor units', () => {
+describe('checkMandate, the amount has to be a whole number of minor units above zero', () => {
   it.each([
     1500.5,
     0.5,
@@ -153,8 +156,16 @@ describe('checkMandate, the amount has to be a whole number of minor units', () 
     const decision = check({ amount_minor: 19.99 });
 
     expect(decision.outcome === 'refuse' && decision.refusals[0]?.message).toContain(
-      'non-negative whole number of minor units',
+      'whole number of minor units above zero',
     );
+  });
+
+  it('refuses a zero amount: there is nothing to authorise (D58)', () => {
+    const decision = check({ amount_minor: 0 });
+
+    expect(decision.outcome).toBe('refuse');
+    expect(reasons(decision)).toEqual(['amount_not_integer_minor_units']);
+    expect(decision.outcome === 'refuse' && decision.refusals[0]?.message).toContain('above zero');
   });
 
   it('checks the amount before anything else, so a bad amount is the only reason', () => {
@@ -313,6 +324,26 @@ describe('checkMandate, the caps', () => {
     const broken = mandateWith({ human_confirm_above_minor: -1 });
 
     expect(reasons(check({ mandate: broken }))).toEqual(['mandate_limits_invalid']);
+  });
+
+  /**
+   * D58 made the *request* amount positive, not the mandate's own limits. A
+   * limit of zero still means something, so these two pin that it is read and
+   * not rejected as malformed.
+   */
+  it('reads a threshold of zero as "ask me about everything"', () => {
+    const alwaysAsk = mandateWith({ human_confirm_above_minor: 0 });
+
+    expect(check({ mandate: alwaysAsk, amount_minor: 1 })).toMatchObject({
+      outcome: 'confirm_required',
+      human_confirm_above_minor: 0,
+    });
+  });
+
+  it('reads a total cap of zero as no budget, not as a broken mandate', () => {
+    const noBudget = mandateWith({ amount_cap_minor: 0 });
+
+    expect(reasons(check({ mandate: noBudget, amount_minor: 1 }))).toEqual(['budget_exceeded']);
   });
 
   it('does not compare amounts to a cap it has already called unusable', () => {

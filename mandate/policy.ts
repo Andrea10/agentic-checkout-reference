@@ -23,8 +23,8 @@
  * The order of the checks, and which failures are reported together, is
  * deliberate (decisions D42 and D43):
  *
- * 1. **Two gates.** The amount has to be a non-negative whole number of minor
- *    units, and the signature has to hold. Fail either and the pass stops:
+ * 1. **Two gates.** The amount has to be a whole number of minor units above
+ *    zero, and the signature has to hold. Fail either and the pass stops:
  *    an amount that is not a number cannot be compared to a cap, and claims
  *    under a broken signature are not the issuer's to answer for. Both gates
  *    are reported together if both fail.
@@ -39,7 +39,7 @@
 
 import { AuditLog } from './audit.js';
 import { systemClock } from './clock.js';
-import { createMemoryLedger, isNonNegativeMinorUnits } from './ledger.js';
+import { createMemoryLedger, isNonNegativeMinorUnits, isPositiveMinorUnits } from './ledger.js';
 import { verify } from './sign.js';
 
 import type { Clock } from './clock.js';
@@ -163,10 +163,10 @@ function decide(policy: MandatePolicy, request: PolicyRequest): PolicyDecision {
   // issuer's. Nothing below either of these can be trusted or compared.
   const gates: PolicyRefusal[] = [];
 
-  if (!isNonNegativeMinorUnits(amount)) {
+  if (!isPositiveMinorUnits(amount)) {
     gates.push({
       reason: 'amount_not_integer_minor_units',
-      message: `amount must be a non-negative whole number of minor units, got ${amount}`,
+      message: `amount must be a whole number of minor units above zero, got ${amount}`,
     });
   }
 

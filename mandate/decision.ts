@@ -27,7 +27,7 @@ export type PolicyOutcome = 'allow' | 'confirm_required' | 'refuse';
 export type PolicyRefusalReason =
   /** The signature does not match the claims, or the mandate is unreadable. */
   | VerifyFailureReason
-  /** The amount asked for is not a non-negative whole number of minor units. */
+  /** The amount asked for is not a whole number of minor units above zero. */
   | 'amount_not_integer_minor_units'
   /** The mandate was granted to a different agent. */
   | 'agent_mismatch'

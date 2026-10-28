@@ -5,7 +5,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { createMemoryLedger, isNonNegativeMinorUnits } from '../../mandate/index.js';
+import {
+  createMemoryLedger,
+  isNonNegativeMinorUnits,
+  isPositiveMinorUnits,
+} from '../../mandate/index.js';
 
 const MANDATE = '7f1c2a5e-9b3d-4c81-a2f6-0d5e8b4a1c33';
 const OTHER_MANDATE = '00000000-0000-4000-8000-000000000000';
@@ -75,5 +79,40 @@ describe('isNonNegativeMinorUnits', () => {
     {},
   ])('rejects %p', (amount) => {
     expect(isNonNegativeMinorUnits(amount)).toBe(false);
+  });
+});
+
+describe('isPositiveMinorUnits', () => {
+  it.each([1, 2500, Number.MAX_SAFE_INTEGER])('accepts %p', (amount) => {
+    expect(isPositiveMinorUnits(amount)).toBe(true);
+  });
+
+  it.each([
+    0,
+    -1,
+    -0.5,
+    0.5,
+    2500.000001,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 2,
+    '2500',
+    null,
+    undefined,
+    {},
+  ])('rejects %p', (amount) => {
+    expect(isPositiveMinorUnits(amount)).toBe(false);
+  });
+
+  /**
+   * The two forms are deliberately different (D58). A purchase of nothing is
+   * refused, but a *cap* of zero is meaningful — it authorises nothing — and
+   * a `human_confirm_above_minor` of zero means "ask me about everything", so
+   * the mandate's own limits are still validated with the non-negative form.
+   */
+  it('differs from the non-negative form on zero, and only on zero', () => {
+    expect(isPositiveMinorUnits(0)).toBe(false);
+    expect(isNonNegativeMinorUnits(0)).toBe(true);
   });
 });

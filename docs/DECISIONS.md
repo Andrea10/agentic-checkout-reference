@@ -458,6 +458,31 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   packages, so it has to alias one of the two `systemClock`s. T10 consolidates
   the docs and could hoist the type then.
 
+## D58 · The amount must be positive, not merely non-negative — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** The request-amount gate in `checkMandate()` requires a whole
+  number of minor units **above zero**. An amount of 0 is refused, with the
+  existing `amount_not_integer_minor_units` code and a message that now reads
+  "above zero". `isPositiveMinorUnits()` is the new check; the non-negative
+  form stays for the mandate's own caps and for a recorded spend.
+- **Alternative.** Allow 0, as D42 and the original gate first read it: zero
+  is a non-negative integer, it breaks no cap, and the checks below it are all
+  well defined.
+- **Why.** A zero-value purchase has no meaning — there is nothing to
+  authorise, so there is nothing for a mandate to authorise it against — and
+  T05's `StubRail` already refuses one (`amount_invalid`, "a whole number of
+  minor units above zero"). With the mandate layer allowing what the rail
+  would then reject, an order could pass every policy check and still die at
+  the rail, which is the one outcome a reference implementation should not
+  demonstrate. The two packages now agree on what counts as money.
+- **Cost.** Two money predicates where there was one, and the difference
+  between them is exactly the value zero, which is the kind of distinction a
+  reader skims past. The reason why is written at both call sites and pinned
+  by a test that asserts the two forms differ on zero and only on zero. The
+  reason code still says `integer` rather than `positive`; renaming it would
+  change the refusal vocabulary T07a is about to build on, so the wording
+  moved and the code did not. T10 may want to rename it while consolidating.
+
 ---
 
 ## T05 · Stub rail

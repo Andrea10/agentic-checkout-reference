@@ -73,3 +73,18 @@ export function createMemoryLedger(): SpendLedger {
 export function isNonNegativeMinorUnits(amount: unknown): boolean {
   return typeof amount === 'number' && Number.isSafeInteger(amount) && amount >= 0;
 }
+
+/**
+ * The same check, but for an amount somebody is asking to *spend*: it must be
+ * above zero as well (ruled by Andrea 28 Oct, decision D58). A zero-value
+ * purchase has nothing to authorise, and T05's `StubRail` already refuses
+ * one, so the two packages agree on what money is.
+ *
+ * The non-negative form above stays as it is, because the mandate's own caps
+ * and a recorded spend may legitimately be zero: a cap of 0 authorises
+ * nothing, and a `human_confirm_above_minor` of 0 means "ask me about
+ * everything".
+ */
+export function isPositiveMinorUnits(amount: unknown): boolean {
+  return isNonNegativeMinorUnits(amount) && (amount as number) > 0;
+}

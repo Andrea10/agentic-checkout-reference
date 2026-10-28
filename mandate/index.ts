@@ -27,7 +27,7 @@
 export { AuditLog, formatEntry } from './audit.js';
 export { canonicalBytes, canonicalise, CanonicalisationError } from './canonical.js';
 export { fixedClock, systemClock } from './clock.js';
-export { createMemoryLedger, isNonNegativeMinorUnits } from './ledger.js';
+export { createMemoryLedger, isNonNegativeMinorUnits, isPositiveMinorUnits } from './ledger.js';
 export { checkMandate, createMandatePolicy, recordSpend } from './policy.js';
 export { exportPublicKey, generateMandateKeyPair, importPublicKey, issue, verify } from './sign.js';
 export { SIGNATURE_FIELD } from './types.js';
