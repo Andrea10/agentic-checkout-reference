@@ -1,5 +1,5 @@
 /**
- * The five catalogue, cart and quote tools, as plain functions.
+ * The catalogue, cart and quote tools, as plain functions.
  *
  * The functions here know nothing about MCP: they take validated arguments
  * and return the body that goes on the wire, or throw a
@@ -11,6 +11,10 @@
  * the internal one: `price.amount` rather than `price_minor`. The internal
  * types in `catalogue.ts` and `cart.ts` are unchanged, so the mapping happens
  * here and nowhere else (D28).
+ *
+ * `place_order` follows the same pattern from its own file, `place-order.ts`:
+ * it is the only tool that touches the mandate layer, and it is long enough to
+ * deserve the room.
  */
 
 import * as z from 'zod';
@@ -18,23 +22,69 @@ import * as z from 'zod';
 import { acpProductsResponseSchema, acpProductSchema, toAcpProduct } from './acp.js';
 import { CATALOGUE, CURRENCY, findProduct, type Product } from './catalogue.js';
 import { CartStore, MAX_LINE_QUANTITY, type Cart } from './cart.js';
+import { DEFAULT_MERCHANT_ID } from './config.js';
 import { MerchantError } from './errors.js';
+import { OrderStore } from './order.js';
 import { QuoteStore, quoteSchema } from './quote.js';
 
-/** Everything the tools read or write. One instance per server. */
+import type { MandatePolicy } from '../mandate/index.js';
+
+/**
+ * Everything the tools read or write. One instance per server.
+ *
+ * `merchant_id` and `policy` are the merchant's configuration and not
+ * arguments: a caller that could name the merchant, or hand over the key its
+ * mandate was signed with, would be authorising itself (D60). `policy` is
+ * optional because a merchant with no issuer configured still has a catalogue
+ * worth browsing; it refuses to take orders, with `merchant_misconfigured`.
+ */
 export interface MerchantState {
   readonly catalogue: readonly Product[];
   readonly carts: CartStore;
   readonly quotes: QuoteStore;
+  readonly orders: OrderStore;
+  /** This merchant's own id, as a mandate has to name it. */
+  readonly merchant_id: string;
+  /** The mandate policy: trusted key, clock, spend ledger and audit log. */
+  readonly policy?: MandatePolicy;
 }
 
-/** Builds the default state: the synthetic catalogue, and empty cart and quote stores. */
-export function createMerchantState(
-  catalogue: readonly Product[] = CATALOGUE,
-  carts: CartStore = new CartStore(catalogue),
-  quotes: QuoteStore = new QuoteStore(catalogue, carts),
-): MerchantState {
-  return { catalogue, carts, quotes };
+/**
+ * What {@link createMerchantState} will build for itself if not given it.
+ *
+ * Every field also accepts an explicit `undefined`, so a caller can write
+ * `{ policy: policyFor(config) }` without having to branch on whether there
+ * is one.
+ */
+export interface MerchantStateOptions {
+  readonly catalogue?: readonly Product[] | undefined;
+  readonly carts?: CartStore | undefined;
+  readonly quotes?: QuoteStore | undefined;
+  readonly orders?: OrderStore | undefined;
+  readonly merchant_id?: string | undefined;
+  readonly policy?: MandatePolicy | undefined;
+}
+
+/**
+ * Builds the state: the synthetic catalogue, empty cart, quote and order
+ * stores, and whatever configuration was passed.
+ *
+ * An options object rather than positional arguments, because T07a added a
+ * third store and two pieces of configuration and the positional form had run
+ * out of room (D60).
+ */
+export function createMerchantState(options: MerchantStateOptions = {}): MerchantState {
+  const catalogue = options.catalogue ?? CATALOGUE;
+  const carts = options.carts ?? new CartStore(catalogue);
+  const quotes = options.quotes ?? new QuoteStore(catalogue, carts);
+  const orders = options.orders ?? new OrderStore();
+  const merchant_id = options.merchant_id ?? DEFAULT_MERCHANT_ID;
+
+  // `exactOptionalPropertyTypes` is on, so an absent policy is an absent key
+  // rather than a key holding `undefined`.
+  return options.policy === undefined
+    ? { catalogue, carts, quotes, orders, merchant_id }
+    : { catalogue, carts, quotes, orders, merchant_id, policy: options.policy };
 }
 
 // --- wire shapes -----------------------------------------------------------

@@ -32,14 +32,14 @@ function freshState(): MerchantState {
     nextId: sequentialCartIds(),
     now: () => FROZEN,
   });
-  return createMerchantState(
-    CATALOGUE,
+  return createMerchantState({
+    catalogue: CATALOGUE,
     carts,
-    new QuoteStore(CATALOGUE, carts, {
+    quotes: new QuoteStore(CATALOGUE, carts, {
       nextId: sequentialQuoteIds(),
       now: () => FROZEN,
     }),
-  );
+  });
 }
 
 describe('list_products', () => {

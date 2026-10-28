@@ -1,5 +1,5 @@
 /**
- * Protocol-level tests.
+ * Protocol-level tests for the catalogue, cart and quote tools.
  *
  * T06a may not add `@modelcontextprotocol/client` (that is T08's dependency),
  * so both suites below drive the server with raw JSON-RPC messages written by
@@ -7,26 +7,29 @@
  * spawned `merchant/stdio.ts` process. The second is the one that proves the
  * stdio entry point works; the first is fast enough to assert against every
  * tool.
+ *
+ * The harness itself lives in `support/raw-client.ts`, because
+ * `place-order.test.ts` drives the same server the same way.
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { InMemoryTransport, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createMerchantServer, SERVER_INFO } from '../../merchant/server.js';
+import { SERVER_INFO } from '../../merchant/server.js';
 
-/**
- * The protocol revision used for the opening exchange.
- *
- * `serveStdio` defaults to `legacy: 'serve'`, which serves a 2025-era
- * `initialize` from the same factory. This is one of the revisions the
- * installed SDK lists in `SUPPORTED_PROTOCOL_VERSIONS`.
- */
-const PROTOCOL_VERSION = '2025-11-25';
-
-const CLIENT_INFO = { name: 'merchant-raw-test-client', version: '0.1.0' };
+import {
+  PROTOCOL_VERSION,
+  asToolResult,
+  bodyOf,
+  handshake,
+  inMemoryClient,
+  isResponseFor,
+  type RawClient,
+  type RpcResponse,
+  type ToolCallResult,
+} from './support/raw-client.js';
 
 /** The tools the merchant advertises, in sorted order. */
 const TOOL_NAMES = [
@@ -35,99 +38,8 @@ const TOOL_NAMES = [
   'get_product',
   'get_quote',
   'list_products',
+  'place_order',
 ];
-
-/** A JSON-RPC response as the tests read it. */
-interface RpcResponse {
-  readonly id: number;
-  readonly result?: Record<string, unknown>;
-  readonly error?: { code: number; message: string };
-}
-
-/** The `tools/call` result shape the merchant returns. */
-interface ToolCallResult {
-  content: { type: string; text: string }[];
-  structuredContent?: Record<string, unknown>;
-  isError?: boolean;
-}
-
-/** Sends requests and resolves them by id. */
-interface RawClient {
-  request(method: string, params?: Record<string, unknown>): Promise<RpcResponse>;
-  notify(method: string, params?: Record<string, unknown>): void;
-  close(): Promise<void>;
-}
-
-function isResponseFor(message: unknown, id: number): message is RpcResponse {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    (message as { id?: unknown }).id === id
-  );
-}
-
-/** Parses the single text block of a tool result as JSON. */
-function bodyOf(result: ToolCallResult): Record<string, unknown> {
-  const first = result.content[0];
-  expect(first?.type).toBe('text');
-  return JSON.parse(first?.text ?? '{}') as Record<string, unknown>;
-}
-
-function asToolResult(response: RpcResponse): ToolCallResult {
-  expect(response.error).toBeUndefined();
-  return response.result as unknown as ToolCallResult;
-}
-
-/** Drives a server over the SDK's linked in-memory transport pair. */
-async function inMemoryClient(): Promise<RawClient> {
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const waiting = new Map<number, (response: RpcResponse) => void>();
-  let nextId = 0;
-
-  clientTransport.onmessage = (message: JSONRPCMessage): void => {
-    const id = (message as { id?: unknown }).id;
-    if (typeof id === 'number') {
-      waiting.get(id)?.(message as unknown as RpcResponse);
-      waiting.delete(id);
-    }
-  };
-
-  await clientTransport.start();
-  await createMerchantServer().connect(serverTransport);
-
-  return {
-    async request(method, params = {}) {
-      nextId += 1;
-      const id = nextId;
-      const settled = new Promise<RpcResponse>((resolve, reject) => {
-        waiting.set(id, resolve);
-        setTimeout(() => {
-          reject(new Error(`timed out waiting for ${method}`));
-        }, 5_000).unref();
-      });
-      await clientTransport.send({ jsonrpc: '2.0', id, method, params });
-      return settled;
-    },
-    notify(method, params = {}) {
-      void clientTransport.send({ jsonrpc: '2.0', method, params });
-    },
-    async close() {
-      await clientTransport.close();
-    },
-  };
-}
-
-/** Runs the opening exchange and returns the `initialize` result. */
-async function handshake(client: RawClient): Promise<Record<string, unknown>> {
-  const response = await client.request('initialize', {
-    protocolVersion: PROTOCOL_VERSION,
-    capabilities: {},
-    clientInfo: CLIENT_INFO,
-  });
-  expect(response.error).toBeUndefined();
-  client.notify('notifications/initialized');
-  return response.result ?? {};
-}
 
 describe('merchant server over raw JSON-RPC (in-memory transport)', () => {
   let client: RawClient;
@@ -150,7 +62,7 @@ describe('merchant server over raw JSON-RPC (in-memory transport)', () => {
     await fresh.close();
   });
 
-  it('advertises exactly the five catalogue, cart and quote tools', async () => {
+  it('advertises exactly the six catalogue, cart, quote and order tools', async () => {
     const response = await client.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];
 
