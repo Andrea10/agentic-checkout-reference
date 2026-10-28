@@ -29,3 +29,6 @@ T07b claimed 2026-10-28T16:01:43Z
 T07b PR #17 opened 2026-10-28T16:18:58Z
 T07b merged main (T08, chores); T08 collision fixed in test/agent/ only; 514 tests 2026-10-28T16:33:18Z
 T09 claimed 2026-10-28T20:27:49Z
+T09 PR #21 opened 2026-10-28T20:31:28Z
+T09 VERIFIED: one McpServer refuses a second transport, so the demo runs two server instances over one shared MerchantState; the in-memory transport negotiates MCP 2025-11-25 where the spawned merchant/stdio.ts negotiates 2026-07-28 2026-10-28T20:31:28Z
+T09 fresh clone of task/T09: npm ci, test (533), lint, build, typecheck and demo all exit 0; two demo runs byte-identical 2026-10-28T20:31:28Z
