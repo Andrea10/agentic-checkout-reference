@@ -467,7 +467,13 @@ describe('merchant server over a spawned stdio process', () => {
     expect(quote.totals.find((entry) => entry.type === 'total')?.amount).toBe(unitAmount);
   });
 
-  it('refuses a quote for a cart that was changed after quoting, over the pipe', async () => {
+  it('re-quotes a changed cart with the next cart_version and the new total, over the pipe', async () => {
+    // What this asserts is the *fresh* quote, not the refusal: `get_quote`
+    // always prices the cart as it is now. The `quote_stale` refusal that the
+    // old quote earns is asserted in test/merchant/quote.test.ts, under
+    // 'a changed cart invalidates the quote (D38)' — 'refuses the old quote
+    // after the cart changes' for the code, and 'names both versions in the
+    // refusal, so an agent can see what happened' for the message.
     const created = asToolResult(
       await client.request('tools/call', {
         name: 'create_cart',
