@@ -38,6 +38,7 @@ import { placeOrder } from '../../merchant/place-order.js';
 import { QuoteStore, sequentialQuoteIds, totalOf } from '../../merchant/quote.js';
 import { createMerchantServer } from '../../merchant/server.js';
 import { createMerchantState, getQuote, type MerchantState } from '../../merchant/tools.js';
+import { StubRail, type RailLogEntry } from '../../rail/index.js';
 
 import {
   asToolResult,
@@ -92,6 +93,9 @@ interface Merchant {
   readonly policy: MandatePolicy;
   /** The catalogue the server reads. Writable, so a test can sell out a line. */
   readonly catalogue: Product[];
+  /** The stub rail the merchant pays through, and what it recorded. */
+  readonly rail: StubRail;
+  readonly railLog: RailLogEntry[];
   /** Moves the one clock the quote store, the order store and the policy share. */
   advance(seconds: number): void;
   close(): Promise<void>;
@@ -127,6 +131,15 @@ async function openMerchant({ configured = true } = {}): Promise<Merchant> {
     audit: new AuditLog(),
   });
 
+  // A stub rail with a collector for a sink, so a test can read back what the
+  // merchant asked the rail for (D54).
+  const railLog: RailLogEntry[] = [];
+  const rail = new StubRail({
+    log: (entry) => {
+      railLog.push(entry);
+    },
+  });
+
   const state = createMerchantState({
     catalogue,
     carts,
@@ -134,6 +147,7 @@ async function openMerchant({ configured = true } = {}): Promise<Merchant> {
     orders,
     merchant_id: MERCHANT,
     policy: configured ? policy : undefined,
+    rail,
   });
 
   const client = await inMemoryClient(() => createMerchantServer(state));
@@ -144,6 +158,8 @@ async function openMerchant({ configured = true } = {}): Promise<Merchant> {
     state,
     policy,
     catalogue,
+    rail,
+    railLog,
     advance(seconds) {
       now = new Date(Date.parse(now) + seconds * 1_000).toISOString();
     },
@@ -233,14 +249,16 @@ describe('place_order: the approved path', () => {
     await merchant.close();
   });
 
-  it('approves an order the mandate covers, and says so in one word (D62)', async () => {
+  it('pays an order the mandate covers, in one call, and says so in one word (D88)', async () => {
     const { quote_id } = await quoteFor(merchant);
 
     const body = successOf(await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() }));
 
-    expect(body.status).toBe('approved');
+    // `approved` is a state the order passed through while the rail was being
+    // called; it is never a body the merchant sends (D88).
+    expect(body.status).toBe('paid');
     expect(body.order_id).toBe('order_000001');
-    // Approved is not paid: no token, because nothing is waiting for a human.
+    // No token, because nothing is waiting for a human.
     expect(body.confirmation_token).toBeUndefined();
     expect(Object.keys(body).sort()).toEqual(['order_id', 'status']);
   });
@@ -259,7 +277,7 @@ describe('place_order: the approved path', () => {
     await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
     const stored = merchant.state.orders.get('order_000001');
 
-    expect(stored?.status).toBe('approved');
+    expect(stored?.status).toBe('paid');
     expect(stored?.quote_id).toBe(quote_id);
     expect(stored?.cart_id).toBe(cart_id);
     expect(stored?.cart_version).toBe(2);
@@ -299,14 +317,67 @@ describe('place_order: the approved path', () => {
     expect(entry?.outcome).toBe('allow');
   });
 
-  it('does not pay: the rail is not called and no budget is consumed (D45, T07b)', async () => {
+  it('authorises then captures, using the order id as the rail\u2019s order_ref (D56)', async () => {
     const { quote_id } = await quoteFor(merchant);
 
     await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
 
-    // `recordSpend` is T07b's call, after the rail succeeds. Until then the
-    // mandate has spent nothing, so the whole cap is still available.
-    expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(0);
+    expect(
+      merchant.railLog.map((entry) => ({
+        call: entry.call,
+        outcome: entry.outcome,
+        order_ref: entry.order_ref,
+        amount_minor: entry.amount_minor,
+      })),
+    ).toEqual([
+      { call: 'authorise', outcome: 'ok', order_ref: 'order_000001', amount_minor: MUG_PRICE },
+      { call: 'capture', outcome: 'ok', order_ref: 'order_000001', amount_minor: MUG_PRICE },
+    ]);
+    expect(merchant.rail.statusOf('auth_000001')).toBe('captured');
+  });
+
+  it('records the spend once, for the amount the rail took (D45, D87)', async () => {
+    const { quote_id } = await quoteFor(merchant);
+
+    await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
+
+    // The amount checked, the amount authorised and the amount recorded are
+    // one number. Nothing in the type system ties them together (D51's cost),
+    // so a test does.
+    expect(merchant.policy.audit.entries()[0]?.amount_minor).toBe(MUG_PRICE);
+    expect(merchant.railLog[1]?.amount_minor).toBe(MUG_PRICE);
+    expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(MUG_PRICE);
+  });
+
+  it('keeps the authorisation and the capture on the order', async () => {
+    const { quote_id } = await quoteFor(merchant);
+
+    await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
+    const stored = merchant.state.orders.get('order_000001');
+
+    expect(stored?.status === 'paid' ? stored.authorisation.authorisation_id : '').toBe(
+      'auth_000001',
+    );
+    expect(stored?.status === 'paid' ? stored.capture.amount_minor : 0).toBe(MUG_PRICE);
+  });
+
+  it('spends the budget, so a second order over what is left is refused', async () => {
+    const first = await quoteFor(merchant, MUG, 2);
+    const second = await quoteFor(merchant);
+    // 2900 for two mugs, under a 3000 cap and a 3000 per-transaction cap,
+    // leaving 100 of the 3000 for anything after it.
+    const mandate = mandateFor({
+      amount_cap_minor: 3000,
+      per_transaction_cap_minor: 3000,
+      human_confirm_above_minor: 5000,
+    });
+
+    expect(successOf(await order(merchant, { quote_id: first.quote_id, agent: AGENT, mandate })).status).toBe('paid');
+    const refused = await order(merchant, { quote_id: second.quote_id, agent: AGENT, mandate });
+
+    expect(reasonsOf(refused)).toEqual(['budget_exceeded']);
+    expect(refusalOf(refused).reasons?.[0]?.message).toContain('100');
+    expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(2900);
   });
 });
 
@@ -592,7 +663,7 @@ describe('place_order: every policy refusal, through the server (D42, D66)', () 
     const body = successOf(
       await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() }),
     );
-    expect(body.status).toBe('approved');
+    expect(body.status).toBe('paid');
   });
 });
 
@@ -884,14 +955,14 @@ describe('place_order: what the tool advertises', () => {
     const { outputSchema } = await schemasOf();
     const properties = outputSchema['properties'] as Record<string, Record<string, unknown>>;
 
-    expect(properties['status']?.['enum']).toEqual(['approved', 'awaiting_confirmation']);
+    expect(properties['status']?.['enum']).toEqual(['paid', 'awaiting_confirmation']);
     expect((outputSchema['required'] as string[]).sort()).toEqual(['order_id', 'status']);
     expect(properties['confirmation_token']?.['type']).toBe('string');
   });
 });
 
 describe('place_order as a plain function (D14)', () => {
-  it('throws a MandateRefusedError carrying every reason', () => {
+  it('throws a MandateRefusedError carrying every reason', async () => {
     const state = createMerchantState({
       merchant_id: MERCHANT,
       policy: createMandatePolicy({ publicKey: issuer.publicKey, clock: () => NOW }),
@@ -901,7 +972,8 @@ describe('place_order as a plain function (D14)', () => {
 
     let thrown: unknown;
     try {
-      placeOrder(state, {
+      // Async since T07b: the money-out path awaits the rail (D88).
+      await placeOrder(state, {
         quote_id: quote.id,
         agent: 'agent-impostor',
         mandate: mandateFor({ merchant: 'merchant-elsewhere' }),

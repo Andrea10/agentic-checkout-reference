@@ -13,8 +13,9 @@
  */
 
 import type { PolicyRefusal } from '../mandate/index.js';
+import type { RailCall, RailDecline } from '../rail/index.js';
 
-/** Every refusal the merchant can raise. T07b appends its own. */
+/** Every refusal the merchant can raise. */
 export type MerchantErrorCode =
   | 'product_not_found'
   | 'cart_not_found'
@@ -28,7 +29,15 @@ export type MerchantErrorCode =
   // T07a: ordering.
   | 'mandate_refused'
   | 'quote_already_ordered'
-  | 'merchant_misconfigured';
+  | 'merchant_misconfigured'
+  // T07b: confirming and paying.
+  | 'confirmation_token_unknown'
+  | 'order_already_paid'
+  | 'order_not_awaiting_confirmation'
+  | 'order_expired'
+  | 'payment_declined'
+  | 'capture_failed'
+  | 'rail_unavailable';
 
 /** A refusal the agent is expected to read and act on. */
 export class MerchantError extends Error {
@@ -67,6 +76,88 @@ function summarise(refusals: readonly PolicyRefusal[]): string {
   return `the mandate does not authorise this order: ${reasons}`;
 }
 
+/**
+ * The rail said no.
+ *
+ * A decline is a result and not an exception at the rail's own seam (D50);
+ * it becomes an exception here because the merchant's tools report every
+ * refusal by throwing (D13), and because an order that was not paid must not
+ * come back as a success body. The rail's own `{ code, message, origin }`
+ * travels with it, unchanged, for the same reason the policy's reasons do
+ * (D66): the vocabulary of *why the money did not move* belongs to the rail.
+ */
+export class RailDeclinedError extends MerchantError {
+  readonly decline: RailDecline;
+
+  constructor(
+    code: 'payment_declined' | 'capture_failed',
+    message: string,
+    decline: RailDecline,
+  ) {
+    super(code, message);
+    this.name = 'RailDeclinedError';
+    this.decline = decline;
+  }
+}
+
+/** The rail would not hold the funds, so nothing was taken (D81). */
+export class PaymentDeclinedError extends RailDeclinedError {
+  constructor(decline: RailDecline) {
+    super(
+      'payment_declined',
+      `the payment was declined (${decline.code}, from the ${decline.origin}): ${decline.message}`,
+      decline,
+    );
+    this.name = 'PaymentDeclinedError';
+  }
+}
+
+/**
+ * The funds were held and the capture was refused.
+ *
+ * A different code from `payment_declined` because the consequence is
+ * different: there is an authorisation outstanding against the cardholder's
+ * money, and this interface has no way to release it (D81).
+ */
+export class CaptureFailedError extends RailDeclinedError {
+  constructor(decline: RailDecline) {
+    super(
+      'capture_failed',
+      `the funds were held but could not be taken (${decline.code}, from the ${decline.origin}): ${decline.message}. The order is not paid and the authorisation is outstanding.`,
+      decline,
+    );
+    this.name = 'CaptureFailedError';
+  }
+}
+
+/**
+ * The rail itself failed: it threw rather than answering.
+ *
+ * This is not a decline and must never be recorded as one — the payment may
+ * have gone through (D50). The order is therefore left in the state it was in,
+ * nothing is written to the spend ledger, and the agent is told that the
+ * payment state is unknown.
+ *
+ * The thrown error's own message does not go on the wire (D85): a real rail's
+ * internal errors carry request detail, URLs and sometimes credentials. It is
+ * kept as `cause` for whoever is reading the server, and the wire gets a fixed
+ * sentence.
+ */
+export class RailUnavailableError extends MerchantError {
+  /** Which of the two rail calls failed. */
+  readonly call: RailCall;
+
+  constructor(call: RailCall, cause: unknown) {
+    super(
+      'rail_unavailable',
+      `the payment rail failed during ${call}, so the payment state is unknown; nothing has been recorded as paid`,
+    );
+    this.name = 'RailUnavailableError';
+    this.call = call;
+    this.cause = cause;
+  }
+}
+
 /** The wire body of a refusal. */
 export interface MerchantErrorBody {
   readonly error: {
@@ -74,6 +165,16 @@ export interface MerchantErrorBody {
     readonly message: string;
     /** Present only on `mandate_refused`: every failed check, in check order. */
     readonly reasons?: readonly { readonly reason: string; readonly message: string }[];
+    /**
+     * Present only on `payment_declined` and `capture_failed`: the rail's own
+     * refusal, including whether the issuer or the payment system said no
+     * (D53, D86).
+     */
+    readonly decline?: {
+      readonly code: string;
+      readonly message: string;
+      readonly origin: string;
+    };
   };
 }
 
@@ -88,6 +189,19 @@ export function toErrorBody(thrown: unknown): MerchantErrorBody {
           reason: refusal.reason,
           message: refusal.message,
         })),
+      },
+    };
+  }
+  if (thrown instanceof RailDeclinedError) {
+    return {
+      error: {
+        code: thrown.code,
+        message: thrown.message,
+        decline: {
+          code: thrown.decline.code,
+          message: thrown.decline.message,
+          origin: thrown.decline.origin,
+        },
       },
     };
   }

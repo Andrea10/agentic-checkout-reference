@@ -27,7 +27,10 @@ import { MerchantError } from './errors.js';
 import { OrderStore } from './order.js';
 import { QuoteStore, quoteSchema } from './quote.js';
 
+import { StubRail } from '../rail/index.js';
+
 import type { MandatePolicy } from '../mandate/index.js';
+import type { Rail } from '../rail/index.js';
 
 /**
  * Everything the tools read or write. One instance per server.
@@ -37,6 +40,10 @@ import type { MandatePolicy } from '../mandate/index.js';
  * mandate was signed with, would be authorising itself (D60). `policy` is
  * optional because a merchant with no issuer configured still has a catalogue
  * worth browsing; it refuses to take orders, with `merchant_misconfigured`.
+ *
+ * `rail` is configuration too, and unlike `policy` it is never absent: a
+ * merchant with no rail could not sell anything at all, so there is nothing
+ * for it to degrade into (D89).
  */
 export interface MerchantState {
   readonly catalogue: readonly Product[];
@@ -47,6 +54,8 @@ export interface MerchantState {
   readonly merchant_id: string;
   /** The mandate policy: trusted key, clock, spend ledger and audit log. */
   readonly policy?: MandatePolicy;
+  /** Where the money goes. A deterministic {@link StubRail} by default (D89). */
+  readonly rail: Rail;
 }
 
 /**
@@ -63,6 +72,7 @@ export interface MerchantStateOptions {
   readonly orders?: OrderStore | undefined;
   readonly merchant_id?: string | undefined;
   readonly policy?: MandatePolicy | undefined;
+  readonly rail?: Rail | undefined;
 }
 
 /**
@@ -79,12 +89,17 @@ export function createMerchantState(options: MerchantStateOptions = {}): Merchan
   const quotes = options.quotes ?? new QuoteStore(catalogue, carts);
   const orders = options.orders ?? new OrderStore();
   const merchant_id = options.merchant_id ?? DEFAULT_MERCHANT_ID;
+  // A stub rail with every default: sequential authorisation ids, a stepping
+  // clock from a synthetic epoch, and a log that writes nowhere (D54, D55).
+  // Silence is the only safe default for a server whose stdout is a protocol
+  // channel; whoever wants a transcript passes `new StubRail({ log })`.
+  const rail = options.rail ?? new StubRail();
 
   // `exactOptionalPropertyTypes` is on, so an absent policy is an absent key
   // rather than a key holding `undefined`.
   return options.policy === undefined
-    ? { catalogue, carts, quotes, orders, merchant_id }
-    : { catalogue, carts, quotes, orders, merchant_id, policy: options.policy };
+    ? { catalogue, carts, quotes, orders, merchant_id, rail }
+    : { catalogue, carts, quotes, orders, merchant_id, rail, policy: options.policy };
 }
 
 // --- wire shapes -----------------------------------------------------------

@@ -34,6 +34,7 @@ import {
 /** The tools the merchant advertises, in sorted order. */
 const TOOL_NAMES = [
   'add_to_cart',
+  'confirm_order',
   'create_cart',
   'get_product',
   'get_quote',
@@ -62,7 +63,7 @@ describe('merchant server over raw JSON-RPC (in-memory transport)', () => {
     await fresh.close();
   });
 
-  it('advertises exactly the six catalogue, cart, quote and order tools', async () => {
+  it('advertises exactly the seven catalogue, cart, quote and order tools', async () => {
     const response = await client.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];
 

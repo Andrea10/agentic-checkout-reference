@@ -48,7 +48,15 @@ export {
 } from './cart.js';
 export type { Cart, CartIdFactory, CartItemRequest, CartLine, Clock } from './cart.js';
 
-export { MandateRefusedError, MerchantError, toErrorBody } from './errors.js';
+export {
+  CaptureFailedError,
+  MandateRefusedError,
+  MerchantError,
+  PaymentDeclinedError,
+  RailDeclinedError,
+  RailUnavailableError,
+  toErrorBody,
+} from './errors.js';
 export type { MerchantErrorBody, MerchantErrorCode } from './errors.js';
 
 export {
@@ -61,6 +69,7 @@ export {
 export type { Environment, MerchantConfig } from './config.js';
 
 export {
+  HELD_ORDER_TTL_SECONDS,
   ORDER_STATUSES,
   OrderStore,
   randomConfirmationTokens,
@@ -70,20 +79,39 @@ export {
 } from './order.js';
 export type {
   ApprovedOrder,
+  AuthorisedOrder,
   ConfirmationTokenFactory,
+  DeclinedOrder,
   HeldOrder,
+  HoldTerms,
   Order,
   OrderFacts,
   OrderIdFactory,
   OrderLine,
   OrderStatus,
+  PaidOrder,
+  PayableOrder,
 } from './order.js';
+
+export { assertStockAvailable } from './stock.js';
+export type { StockLine } from './stock.js';
+
+export { settle } from './pay.js';
+export type { PaidResult, PaymentContext } from './pay.js';
 
 export { mandateWireSchema } from './mandate-wire.js';
 export type { MandateWire } from './mandate-wire.js';
 
-export { placeOrder, placeOrderInput, placeOrderOutput } from './place-order.js';
+export {
+  PLACE_ORDER_STATUSES,
+  placeOrder,
+  placeOrderInput,
+  placeOrderOutput,
+} from './place-order.js';
 export type { PlaceOrderArgs, PlaceOrderResult } from './place-order.js';
+
+export { confirmOrder, confirmOrderInput, confirmOrderOutput } from './confirm-order.js';
+export type { ConfirmOrderArgs, ConfirmOrderResult } from './confirm-order.js';
 
 export {
   addToCart,
