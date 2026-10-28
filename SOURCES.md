@@ -22,7 +22,11 @@ Roots are **deprecated** as of this revision (SEP-2577) but remain in the specif
 until at least the first revision released on or after 2027-07-28; new implementations
 should not adopt them, so Elicitation is the only client feature this design would
 consider. (Deprecation confirmed at `/specification/2026-07-28/deprecated`, read
-2026-10-27.) It also defines opt-in extensions (Tasks, MCP Apps, Skills over MCP) that
+2026-10-27.) Logging, a server utility, is deprecated under the same SEP-2577: the page lists it as
+deprecated in 2026-07-28 with the migration path "Log to stderr for stdio transports; use
+OpenTelemetry for observability" and the same earliest removal (confirmed on
+`/specification/2026-07-28/deprecated` on 2026-10-28 by the pre-reviewer agent reading the page
+during the review of PR #11). It also defines opt-in extensions (Tasks, MCP Apps, Skills over MCP) that
 this design does not use.
 
 ### MCP specification, revision 2025-06-18

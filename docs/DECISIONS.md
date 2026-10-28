@@ -133,7 +133,7 @@ Created by T06a, seeded with the decisions T01 proposed and Andrea ruled on.
 
 Andrea ruled on D11 to D20 on 27 Oct: all ACCEPTED, with D12 amended — he
 chose the alternative, so D12 below is rewritten to describe what is now
-implemented. D21 is PROPOSED and awaits a ruling.
+implemented. D21 was accepted by Andrea on 28 Oct.
 
 ## D11 · A cart is addressed only by an explicit `cart_id` — ACCEPTED (Andrea, 27 Oct)
 
@@ -263,7 +263,7 @@ entry below describes what is implemented.
   `legacy: 'serve'` path. The modern 2026-07-28 opening is therefore **not**
   exercised by these tests; T08 covers the client side and should exercise it.
 
-## D21 · D06's cost cites an SDK that D09 replaced — PROPOSED (T06a)
+## D21 · D06's cost cites an SDK that D09 replaced — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Leave D06's text exactly as ruled and record the consequence
   here instead. (T06a first wrote this as a dated note inside D06's Cost
@@ -373,7 +373,7 @@ T06b appends them here, wording unchanged except the numbering.
 
 ## T06b · Merchant quote and ACP shaping
 
-D27 to D39 are PROPOSED and await a ruling. All thirteen come out of reading
+D27 to D39 were accepted by Andrea on 28 Oct. All thirteen come out of reading
 four ACP files in full on 2026-10-28, under
 `agentic-commerce-protocol/agentic-commerce-protocol/spec/2026-04-17/`:
 `openapi/openapi.feed.yaml`, `json-schema/schema.feed.json`,
@@ -382,7 +382,7 @@ four ACP files in full on 2026-10-28, under
 claim: the merchant speaks MCP, not ACP's HTTP endpoints, and these entries are
 the list of places the two part company.
 
-## D27 · ACP spec version 2026-04-17, not `unreleased` — PROPOSED (T06b)
+## D27 · ACP spec version 2026-04-17, not `unreleased` — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Shape to the `spec/2026-04-17/` directory, the latest stable
   version, and name that version in the code (`ACP_SPEC_VERSION` in
@@ -397,7 +397,7 @@ the list of places the two part company.
   the mapping is in one file (`merchant/acp.ts`), so the drift is visible and
   cheap to close, but nothing automated tells us it has happened.
 
-## D28 · ACP vocabulary on the wire only; the internal types keep `*_minor` — PROPOSED (T06b)
+## D28 · ACP vocabulary on the wire only; the internal types keep `*_minor` — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `merchant/catalogue.ts` and `merchant/cart.ts` keep
   `price_minor`, `unit_price_minor`, `line_total_minor` and `subtotal_minor`.
@@ -416,7 +416,7 @@ the list of places the two part company.
   The mapping functions are the only place a rename can go wrong, which is why
   `test/merchant/acp.test.ts` asserts the whole shaped object field by field.
 
-## D29 · One ACP variant per catalogue product, with the same id — PROPOSED (T06b)
+## D29 · One ACP variant per catalogue product, with the same id — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Each catalogue product becomes an ACP feed `Product` holding
   exactly one `Variant`, and the variant's `id` is the product's `id`.
@@ -433,7 +433,7 @@ the list of places the two part company.
   learn that the moment a second size appeared. The variant also repeats the
   product's `title` and `description`, which is redundant on the wire.
 
-## D30 · `stock` leaves the product object; the quote line carries the number — PROPOSED (T06b)
+## D30 · `stock` leaves the product object; the quote line carries the number — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The ACP product carries only `availability.available` and
   `availability.status`. The integer stock level appears once, on the quote's
@@ -452,7 +452,7 @@ the list of places the two part company.
   (D17 — stock is checked, never reserved). `available_quantity` on the quote is
   a snapshot for the same reason, so T07's `place_order` re-checks.
 
-## D31 · The two ACP files disagree on the low-stock word, and each object keeps its own — PROPOSED (T06b)
+## D31 · The two ACP files disagree on the low-stock word, and each object keeps its own — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The product's `availability.status` uses the feed schema's
   `limited_stock`. The quote line's `availability_status` uses the checkout
@@ -473,7 +473,7 @@ the list of places the two part company.
   only job is to assert the difference on purpose. If ACP reconciles the two
   files, this entry and one helper go away.
 
-## D32 · The currency code stays upper case — PROPOSED (T06b)
+## D32 · The currency code stays upper case — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `GBP`, upper case, everywhere: on the ACP product price and on
   the quote.
@@ -487,7 +487,7 @@ the list of places the two part company.
   examples. An ACP client that compares currency codes as raw strings against a
   lower-case literal would not match ours.
 
-## D33 · `list_products` returns the ACP `ProductsResponse` exactly: no `count`, no `currency` — PROPOSED (T06b)
+## D33 · `list_products` returns the ACP `ProductsResponse` exactly: no `count`, no `currency` — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The body is `{ "products": [...] }` and nothing else. T06a's
   `count` and top-level `currency` are gone.
@@ -501,7 +501,7 @@ the list of places the two part company.
 - **Cost.** A breaking change to a surface T06a shipped, which is what D15
   warned about. An agent that read `count` gets `undefined`.
 
-## D34 · The cart keeps its own shape; the quote is the ACP checkout object — PROPOSED (T06b)
+## D34 · The cart keeps its own shape; the quote is the ACP checkout object — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `create_cart` and `add_to_cart` return the internal cart
   (`cart_id`, `items`, `subtotal_minor`, `version`). `get_quote` returns an
@@ -521,7 +521,7 @@ the list of places the two part company.
   look for `/checkout_sessions` and find a cart plus a quote instead. If Stage
   2 ever speaks ACP over HTTP, the cart has nowhere to go.
 
-## D35 · Money in a quote is ACP `Total` entries, with the currency stated once — PROPOSED (T06b)
+## D35 · Money in a quote is ACP `Total` entries, with the currency stated once — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Every amount in a quote is a `{ type, display_text, amount }`
   triple in a `totals` array, per line and for the cart. `currency` appears
@@ -541,7 +541,7 @@ the list of places the two part company.
   three cart-level totals are all the same number today, which looks like
   padding until you know it is the quote saying there are no adjustments.
 
-## D36 · No `tax` and no `fulfillment` lines at all, rather than zeros — PROPOSED (T06b)
+## D36 · No `tax` and no `fulfillment` lines at all, rather than zeros — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A quote carries no `tax` total, no `fulfillment` total and an
   empty `fulfillment_options`. `messages` and `links` are empty too, and the
@@ -561,7 +561,7 @@ the list of places the two part company.
   not told it which. If Stage 2 adds a real rail, tax is the first thing
   missing.
 
-## D37 · A quote is `ready_for_payment`, and an empty cart is refused — PROPOSED (T06b)
+## D37 · A quote is `ready_for_payment`, and an empty cart is refused — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Every quote this merchant issues has ACP status
   `ready_for_payment`. Quoting an empty cart is refused with a new
@@ -584,7 +584,7 @@ the list of places the two part company.
   an agent that only reads `status` will not notice an `isError` result. This
   is the entry I would most like overruled if you disagree.
 
-## D38 · A quote expires after fifteen minutes and is tied to one cart version — PROPOSED (T06b)
+## D38 · A quote expires after fifteen minutes and is tied to one cart version — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A quote carries `created_at`, `expires_at`
   (`QUOTE_TTL_SECONDS` = 900) and `cart_version`, the cart's change counter at
@@ -612,7 +612,7 @@ the list of places the two part company.
   `cart_version` are fields ACP does not define, so a strict ACP client would
   reject the quote on `additionalProperties`.
 
-## D39 · Quotes are held server-side and addressed by `quote_id` — PROPOSED (T06b)
+## D39 · Quotes are held server-side and addressed by `quote_id` — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A `QuoteStore` holds issued quotes in the server process,
   mirroring `CartStore`: random `quote_<uuid>` ids by default,
@@ -641,9 +641,9 @@ the list of places the two part company.
 
 ## T04 · Mandate policy and audit log
 
-D40 to D49 are T04's. All are PROPOSED and await a ruling.
+D40 to D49 are T04's. All were accepted by Andrea on 28 Oct.
 
-## D40 · Policy is a separate call; `verify()` keeps its signature-only contract — PROPOSED (T04)
+## D40 · Policy is a separate call; `verify()` keeps its signature-only contract — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Add `checkMandate(policy, request)` alongside T03's `verify()`,
   which is unchanged. `verify()` answers "is this mandate the issuer's, and
@@ -661,7 +661,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   which; the merchant's `place_order` (T07a) is the only caller that matters
   and it uses `checkMandate()`.
 
-## D41 · Three outcomes, not a boolean — PROPOSED (T04)
+## D41 · Three outcomes, not a boolean — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `PolicyDecision` is a union discriminated on `outcome`:
   `allow`, `confirm_required`, `refuse`.
@@ -676,7 +676,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   `ok`, the policy returns `outcome` — and every `switch` has three arms to
   answer for, which is the point but is still more code than a boolean.
 
-## D42 · Two gates, then every remaining check reported at once — PROPOSED (T04)
+## D42 · Two gates, then every remaining check reported at once — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The amount's shape and the signature are gates: if either
   fails the pass stops, and both are reported if both failed. Past them, all
@@ -695,7 +695,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   mandate than a fail-fast one would be; only a correctly signed mandate gets
   the full list, which bounds who can probe.
 
-## D43 · Currency is checked before the caps, not after as PRD R2 lists them — PROPOSED (T04)
+## D43 · Currency is checked before the caps, not after as PRD R2 lists them — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The order is agent, merchant, window, currency, the mandate's
   own limits, per-transaction cap, remaining budget. A currency mismatch or an
@@ -709,7 +709,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
 - **Cost.** PRD R2's list no longer matches the code. T10 is required to check
   the PRD against the final decisions, and should correct the order there.
 
-## D44 · Remaining budget lives in an injected `SpendLedger`, in memory for Stage 1 — PROPOSED (T04)
+## D44 · Remaining budget lives in an injected `SpendLedger`, in memory for Stage 1 — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A `SpendLedger` interface with `spent()` and `record()`, keyed
   by `mandate_id`, injected into the policy. Stage 1's implementation,
@@ -727,7 +727,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   with every mandate the process sees. A real deployment needs a durable,
   transactional ledger.
 
-## D45 · Recording a spend is a separate call, made after the rail succeeds — PROPOSED (T04)
+## D45 · Recording a spend is a separate call, made after the rail succeeds — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `recordSpend(policy, spend)` is the only thing that consumes
   budget; `checkMandate()` never writes to the ledger. A `PolicyDecision` is
@@ -747,7 +747,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   transaction — the same machinery D17 declined for stock, and adjacent to
   T12's replay protection.
 
-## D46 · `print()` takes its stream, and the lines are text, not JSON — PROPOSED (T04)
+## D46 · `print()` takes its stream, and the lines are text, not JSON — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `AuditLog.print(stream)` has no default stream. `OutputStream`
   is the smallest useful shape, `{ write(chunk: string): unknown }`, so a test
@@ -772,7 +772,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   change. A test also asserts that no file in `mandate/` so much as mentions
   `process.stdout`, which is a crude guard but the one that matches the risk.
 
-## D47 · A mandate whose own limits or window are unusable is refused, not thrown — PROPOSED (T04)
+## D47 · A mandate whose own limits or window are unusable is refused, not thrown — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `mandate_limits_invalid` and `mandate_window_invalid` are
   reason codes like any other, so an unusable mandate is refused and logged.
@@ -786,7 +786,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   loudly at the issuer. The refusal message says which kind of field is
   unusable, which is as much as can be said without quoting the mandate back.
 
-## D48 · The audit log records checks, not settlements — PROPOSED (T04)
+## D48 · The audit log records checks, not settlements — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The only way into the log is `record(decision)`. What was
   actually spent lives in the ledger.
@@ -801,7 +801,7 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   and is the natural place to add a settlement entry; doing so means adding a
   kind to `AuditEntry` and widening the one entrance.
 
-## D49 · `mandate/` declares its own clock — PROPOSED (T04)
+## D49 · `mandate/` declares its own clock — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `mandate/clock.ts` exports `Clock`, `systemClock` and
   `fixedClock`, duplicating the `Clock` type and `systemClock` that
@@ -896,7 +896,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   `Idempotency-Key` HTTP request header the client generates, pruned after at
   least 24 hours; it is not a field on the object.
 
-## D50 · A decline is a result; only a broken rail throws — PROPOSED (T05)
+## D50 · A decline is a result; only a broken rail throws — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `authorise` and `capture` return
   `{ ok: true, ... } | { ok: false, decline }`. A refusal never throws. An
@@ -917,7 +917,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   become declines, `api_error` and a transport failure throw, and
   `idempotency_error` is a caller bug that throws.
 
-## D51 · One request object per call, and no knowledge of the mandate — PROPOSED (T05)
+## D51 · One request object per call, and no knowledge of the mandate — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `authorise` takes a single `AuthoriseRequest` of
   `order_ref`, `amount_minor` and `currency`; it returns an `Authorisation`
@@ -942,7 +942,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   to be got right, and its tests have to cover it. `rail/` also repeats three
   one-line type aliases that `mandate/` already has.
 
-## D52 · `capture` takes the authorisation id and takes the lot — PROPOSED (T05)
+## D52 · `capture` takes the authorisation id and takes the lot — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `capture({ authorisation_id })`. No amount: a capture settles
   the authorisation in full, and the `Capture` it returns carries the
@@ -964,7 +964,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   capture is a one-shot decision rather than a running balance — more
   semantics than a Stage 1 reference wants to teach.
 
-## D53 · A decline carries a code, a message and an origin — PROPOSED (T05)
+## D53 · A decline carries a code, a message and an origin — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `RailDecline` is `{ code, message, origin }`. `code` is a
   closed union of eight values; `origin` is `'issuer' | 'rail'`. All eight
@@ -991,7 +991,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   unnoticed. `DECLINE_CODES` also has to be kept in step with the union by
   hand — a typed exhaustiveness check in the same test does that.
 
-## D54 · The stub logs through an injected sink, and is silent by default — PROPOSED (T05)
+## D54 · The stub logs through an injected sink, and is silent by default — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `StubRail` takes `log: (entry: RailLogEntry) => void`. It is
   handed structured entries, not strings, and the default is
@@ -1016,7 +1016,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   audit log is the record of *authorisation* decisions and this is the record
   of what the *rail* did, which T10 should explain, or fold together.
 
-## D55 · The stub is deterministic by construction — PROPOSED (T05)
+## D55 · The stub is deterministic by construction — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Default authorisation ids are sequential — `auth_000001` — and
   the default clock starts at `STUB_RAIL_EPOCH` (`2026-01-01T00:00:00.000Z`)
@@ -1041,7 +1041,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   not mistake for wall-clock — `2026-01-01T00:00:00.000Z` is deliberately
   round so that it cannot be. The one-second step is arbitrary.
 
-## D56 · `order_ref` is a reference, not an idempotency key — PROPOSED (T05)
+## D56 · `order_ref` is a reference, not an idempotency key — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The rail echoes `order_ref` and logs it, and nothing more. Two
   `authorise` calls with the same `order_ref` produce two independent
@@ -1062,7 +1062,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
   an `idempotency_key` field on `AuthoriseRequest` is the natural place for it
   (a non-breaking addition, by D51).
 
-## D57 · The rail refuses the second capture, not the merchant — PROPOSED (T05)
+## D57 · The rail refuses the second capture, not the merchant — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `StubRail` remembers each authorisation and its state
   (`authorised` or `captured`) in an in-process `Map`. Capturing an unknown id
