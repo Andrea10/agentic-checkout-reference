@@ -2157,7 +2157,7 @@ bank (D55).
   broken until you read this entry or D54 — the demo is where that gets fixed,
   and T09 has to remember to.
 
-## D94 · Settlements go in the audit log, as a second kind of entry — PROPOSED
+## D94 · Settlements go in the audit log, as a second kind of entry — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `AuditEntry` becomes a discriminated union on a new `kind`
   field: `mandate_check`, which is the entry that existed before, and
@@ -2193,7 +2193,7 @@ bank (D55).
   set of self-contained rows, which is a fair description of a journal and a
   poor description of a table.
 
-## D95 · One log, two entrances, and the check lines do not move — PROPOSED
+## D95 · One log, two entrances, and the check lines do not move — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `AuditLog` gains a second entrance, `recordSettlement()`,
   beside `record()`. Each builds and freezes its own entry and pushes it; there
@@ -2230,7 +2230,7 @@ bank (D55).
   terminal and would not survive being parsed as a table (D46's cost, which is
   why `entries()` exists).
 
-## D96 · The audit line carries the decline's code and origin, and not its message — PROPOSED
+## D96 · The audit line carries the decline's code and origin, and not its message — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A settlement entry's `decline` is `{ code, origin }`, both
   typed `string` in `mandate/audit.ts` rather than imported from `rail/`. The
@@ -2260,7 +2260,7 @@ bank (D55).
   one more detail — but the code and the origin are the two things D86 said a
   reader must not have to parse out of prose, and they are both here.
 
-## D97 · The settlement line is stamped from the policy's clock, and carries the amount the rail took — PROPOSED
+## D97 · The settlement line is stamped from the policy's clock, and carries the amount the rail took — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The `at` on a settlement entry comes from `policy.clock()`,
   the same clock the mandate decisions are stamped from, read at the moment
@@ -2290,7 +2290,7 @@ bank (D55).
   the truth and is also the kind of discrepancy a reader may read as a bug
   before reading this entry.
 
-## D98 · `settle()` is the one writer, and it writes before the ledger — PROPOSED
+## D98 · `settle()` is the one writer, and it writes before the ledger — ACCEPTED (Andrea, 28 Oct; the write order is pinned by a test added to T12)
 
 - **Decision.** Every settlement entry is written inside `settle()` in
   `merchant/pay.ts`, at the point each outcome becomes known: after the order's
@@ -2322,7 +2322,7 @@ bank (D55).
   nothing in the signature changed — but a reader looking for the audit writes
   has to know to look in `pay.ts` and not in the tools.
 
-## D99 · A refusal that never reached the rail settles nothing, and logs nothing — PROPOSED
+## D99 · A refusal that never reached the rail settles nothing, and logs nothing — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A `confirm_order` call refused before the rail — unknown or
   spent token, lapsed hold, stock gone, or a mandate re-check that refused —
@@ -2352,7 +2352,7 @@ bank (D55).
   limits, and if Andrea wants every call logged, the fix is a third kind here
   and not a second log.
 
-## D100 · The demo hosts the merchant in its own process — PROPOSED
+## D100 · The demo hosts the merchant in its own process — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `npm run demo` builds the merchant inside the demo process and
   reaches it over the MCP SDK's `InMemoryTransport` pair, which
@@ -2389,7 +2389,7 @@ bank (D55).
   process that *is* the merchant, but a reader has to notice which side of the
   seam each printed fact came from, so the sections say so.
 
-## D101 · Two MCP clients, two server instances, one merchant state — PROPOSED
+## D101 · Two MCP clients, two server instances, one merchant state — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The demo opens a fresh `McpServer` over the shared
   `MerchantState` for every connection, and opens two of them in run 2: one
@@ -2413,7 +2413,7 @@ bank (D55).
   confirmation endpoint and nothing else; the demo relies on it calling only
   the one tool rather than on being unable to call the others.
 
-## D102 · The whole demo, audit log included, goes to stdout — PROPOSED
+## D102 · The whole demo, audit log included, goes to stdout — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `runDemo()` takes one `OutputStream` and writes everything to
   it — narration, steps, order, rail log and the audit log, the last through
@@ -2436,7 +2436,7 @@ bank (D55).
   stderr split still has it: `runDemo()` takes the stream, so the choice is
   one argument away.
 
-## D103 · Determinism: fixed clock, fixed ids, and no key material printed — PROPOSED
+## D103 · Determinism: fixed clock, fixed ids, and no key material printed — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Two runs of `npm run demo` print byte-identical text. The
   merchant's cart, quote and order stores and the mandate policy all read
@@ -2475,7 +2475,7 @@ bank (D55).
   from 2027 onward — the output says the clock is frozen, and the alternative
   is a demo whose text changes every day and whose README mandate expires.
 
-## D104 · The rail's transcript is collected, not written to stderr — PROPOSED
+## D104 · The rail's transcript is collected, not written to stderr — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The demo passes the stub rail a `RailLogSink` that appends to
   an array, and prints that array as its own section after the order. It does
@@ -2494,7 +2494,7 @@ bank (D55).
   section empty rather than showing a partial line on stderr. Neither matters
   for a two-order demo on a stub.
 
-## D105 · The stdio smoke test builds its own transport — PROPOSED
+## D105 · The stdio smoke test builds its own transport — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `scripts/stdio-smoke.test.ts` constructs the SDK's
   `StdioClientTransport` directly, with `env` set to
@@ -2514,7 +2514,7 @@ bank (D55).
   optional `env` is a small, obvious change to `agent/client.ts` and a
   candidate for T10 or Stage 2; it is outside this task's directories.
 
-## D106 · The two runs differ by exactly one mandate field — PROPOSED
+## D106 · The two runs differ by exactly one mandate field — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Both runs buy the same basket with the same planner —
   `scriptedPlanner()` with its shipped default choice, the two cheapest
@@ -2540,7 +2540,7 @@ bank (D55).
   third run would show it; the task asked for two, and a refusal is better
   read as a test than as a paragraph.
 
-## D107 · Money is printed as pounds and pence beside the minor units — PROPOSED
+## D107 · Money is printed as pounds and pence beside the minor units — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** Every amount in the demo's output is rendered
   `£20.45 (2045 pence)`, by `money()` in `scripts/demo.ts`. `pounds()` does
@@ -2562,7 +2562,7 @@ bank (D55).
   wrong for anything but Stage 1's single currency (D16). It is a demo
   formatter and lives in `scripts/`, not in `mandate/` or `merchant/`.
 
-## D108 · The demo configures its merchant through `configFromEnvironment` — PROPOSED
+## D108 · The demo configures its merchant through `configFromEnvironment` — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The demo exports the issuer's public key with
   `exportPublicKey()`, puts it in a synthetic environment object beside
@@ -2589,7 +2589,7 @@ bank (D55).
   though the demo just put the key there, which is one unreachable-looking
   throw in `startMerchant()`.
 
-## D109 · `scripts/demo.ts` is a module with an entry guard — PROPOSED
+## D109 · `scripts/demo.ts` is a module with an entry guard — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `scripts/demo.ts` exports `runDemo(stream, options?)`, which
   returns a `DemoReport` of what both runs produced, and runs itself only

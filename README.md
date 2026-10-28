@@ -63,7 +63,7 @@ test/
 }
 ```
 
-Every `place_order` call carries a mandate. The merchant verifies the signature, the scope and the remaining budget before it touches the rail. Anything above `human_confirm_above_minor` pauses for a human decision. Every mandate check, pass or fail, is written to the audit log; payment outcomes are being added to it (T07c).
+Every `place_order` call carries a mandate. The merchant verifies the signature, the scope and the remaining budget before it touches the rail. Anything above `human_confirm_above_minor` pauses for a human decision. Every mandate check, pass or fail, is written to the audit log; so is every payment outcome.
 
 ## What this is not
 

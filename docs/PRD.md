@@ -1,6 +1,6 @@
 # PRD: agentic-checkout-reference
 
-*v0.6, 28 Oct 2026. Author: Andrea Caputo.*
+*v0.7, 28 Oct 2026. Author: Andrea Caputo.*
 
 ## 0. In plain words
 
@@ -43,7 +43,7 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 - R2. The merchant first checks two gates, a valid amount and a valid signature, and stops if either fails (D42). Every other check then runs and all failures are reported together, in this order: agent, merchant, window, currency, per-transaction cap, remaining budget. Currency comes before the caps because a cap in one currency says nothing about an amount in another (D43). If nothing failed and the amount is above the human-confirm threshold, the outcome is a confirmation request, not a refusal (D41, R4). Each failure returns a structured refusal reason.
 - R3. Amounts are positive whole numbers of minor units. Zero, fractions and anything else are refused (D58).
 - R4. Above the human-confirm threshold the order is held (`awaiting_confirmation`) for fifteen minutes, until a human confirms with a token. On confirmation the merchant checks again that the stock, the hold and the mandate (expiry, caps, remaining budget) still allow the order; if not, it refuses (D82, D83). A declined card ends the order and spends the token (D84).
-- R5. Every mandate check, pass or fail, is appended to an audit log. Entries are never edited. Payment outcomes (paid, declined, capture failed, rail unavailable) are added to the same log by T07c; until it lands, a declined payment shows in the error body and the rail's log, not in the audit log (D86).
+- R5. Every mandate check and every payment outcome (paid, payment declined, capture failed, rail unavailable), pass or fail, is appended to one audit log. Entries are never edited. A refusal that never reaches the rail leaves no payment entry (D99), and a stock refusal at `place_order` leaves no entry at all (D65).
 
 **Merchant**
 
