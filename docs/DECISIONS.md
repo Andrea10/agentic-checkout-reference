@@ -1800,7 +1800,7 @@ positional-to-options migration when every field is optional.
 
 ## T07b · Merchant confirm_order and rail call
 
-D80 to D89 are T07b's. All are **PROPOSED**: Andrea has not ruled on them.
+D80 to D89 are T07b's. All were accepted by Andrea on 28 Oct.
 
 This section sits *after* D90 to D93 because the file is ordered by task and
 not by number: T08's round-2 addendum took the next free numbers while T07b
@@ -1817,7 +1817,7 @@ four ways a payment can fail. Two of those four are not failures the rail's
 own tests could show, because `StubRail` deliberately never pretends to be a
 bank (D55).
 
-## D80 · Five order states, and a store that refuses any other transition — PROPOSED
+## D80 · Five order states, and a store that refuses any other transition — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** An order is `approved`, `awaiting_confirmation`, `authorised`,
   `paid` or `declined`. Six transitions exist: `approved` and
@@ -1856,7 +1856,7 @@ bank (D55).
   And the matrix test has to be kept honest by hand: adding a state without
   adding its rows leaves the new state untested rather than failing.
 
-## D81 · A refused capture leaves the order `authorised`, with its own error code — PROPOSED
+## D81 · A refused capture leaves the order `authorised`, with its own error code — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `authorise` declined marks the order `declined` and refuses
   with `payment_declined`; nothing was held. `capture` declined leaves the
@@ -1882,7 +1882,7 @@ bank (D55).
   request objects make cheap — and T12 or a later task wants a reconciliation
   path. Said here rather than left for a reader to discover.
 
-## D82 · A hold lasts fifteen minutes, and the quote behind it is never re-read — PROPOSED
+## D82 · A hold lasts fifteen minutes, and the quote behind it is never re-read — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `holdForConfirmation` stamps the order with
   `expires_at = placed_at + HELD_ORDER_TTL_SECONDS` (900, the same window a
@@ -1915,7 +1915,7 @@ bank (D55).
   is the more accurate of the two. And there is still no way to cancel a hold:
   it lapses or it is confirmed.
 
-## D83 · `confirm_order` re-runs the whole mandate check, against the mandate it stored — PROPOSED
+## D83 · `confirm_order` re-runs the whole mandate check, against the mandate it stored — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A held order keeps the `Mandate` it was placed under, and
   `confirm_order` calls `checkMandate()` again with it, against the clock and
@@ -1952,7 +1952,7 @@ bank (D55).
   now be refused at confirmation for a reason that did not exist when the human
   was asked, which is correct and still reads as the merchant changing its mind.
 
-## D84 · The token is spent by the attempt that reaches the rail — PROPOSED
+## D84 · The token is spent by the attempt that reaches the rail — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** A confirmation token releases one payment *attempt*. A
   confirmation that gets as far as `settle()` moves the order out of
@@ -1985,7 +1985,7 @@ bank (D55).
   not care about, so a client that only wants "not confirmable" has to match
   two.
 
-## D85 · A rail that throws is `rail_unavailable`, and its message does not travel — PROPOSED
+## D85 · A rail that throws is `rail_unavailable`, and its message does not travel — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** An exception out of `authorise` or `capture` becomes
   `RailUnavailableError`, code `rail_unavailable`, with a fixed message saying
@@ -2018,7 +2018,7 @@ bank (D55).
   a broken rail has to read the server's own output rather than the tool
   result; the `cause` is there for them.
 
-## D86 · The decline rides on the error body; the audit log is left alone — PROPOSED
+## D86 · The decline rides on the error body; the audit log is left alone — ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)
 
 - **Decision.** `MerchantErrorBody` gains one more conditional field,
   `decline: { code, message, origin }`, present on `payment_declined` and
@@ -2054,8 +2054,13 @@ bank (D55).
   to overrule** — the change is D48's widening, it belongs to T10 or to a task
   whose directories include `mandate/`, and a test here already pins the
   present behaviour so the change would be visible.
+- **Ruling, 28 Oct (Andrea).** Fix it: the settlement goes into the audit log,
+  in a new task, T07c, whose directories include `mandate/` and `merchant/`.
+  This entry stays as the record of the gap until T07c lands; T07c's decisions
+  (D94 to D99) amend it, and the test that pins the present behaviour is
+  updated there.
 
-## D87 · The ledger records the amount the rail took — PROPOSED
+## D87 · The ledger records the amount the rail took — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `recordSpend()` is called with the `amount_minor` off the
   `Capture` the rail returned, not with the amount the policy checked and not
@@ -2082,7 +2087,7 @@ bank (D55).
   and the reverse would leave a consumed budget on an order that does not read
   `paid`. The money has moved by then, so the order's own record goes first.
 
-## D88 · `place_order` pays on the direct path, and `approved` leaves the wire — PROPOSED
+## D88 · `place_order` pays on the direct path, and `approved` leaves the wire — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** An order the mandate covers outright is authorised, captured
   and recorded inside the one `place_order` call, which answers
@@ -2124,7 +2129,7 @@ bank (D55).
   rail now takes its quote with it (D64 frees a quote only for a *refused*
   order), so a declined card means re-quoting the cart.
 
-## D89 · The rail is configuration, and never absent — PROPOSED
+## D89 · The rail is configuration, and never absent — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `MerchantState.rail` is a required `Rail`, defaulted by
   `createMerchantState()` to `new StubRail()` with every stub default:

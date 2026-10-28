@@ -37,7 +37,7 @@ Node 22+. No keys needed for Stage 1.
 ## Layout
 
 ```
-merchant/   MCP server: catalogue, cart, quote, place_order (synthetic data)
+merchant/   MCP server: catalogue, cart, quote, place_order, confirm_order (synthetic data)
 agent/      buyer agent that calls the merchant tools
 mandate/    issue, sign, verify; policy checks; audit log
 rail/       payment interface; stub implementation (Stage 1), Stripe test mode (Stage 2)
@@ -63,7 +63,7 @@ test/
 }
 ```
 
-Every `place_order` call carries a mandate. The merchant verifies the signature, the scope and the remaining budget before it touches the rail. Anything above `human_confirm_above_minor` pauses for a human decision. Every check, pass or fail, is written to the audit log.
+Every `place_order` call carries a mandate. The merchant verifies the signature, the scope and the remaining budget before it touches the rail. Anything above `human_confirm_above_minor` pauses for a human decision. Every mandate check, pass or fail, is written to the audit log; payment outcomes are being added to it (T07c).
 
 ## What this is not
 
