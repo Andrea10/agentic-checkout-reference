@@ -1,5 +1,6 @@
 /**
- * `place_order`: the tool where money is authorised.
+ * `place_order`: the tool where money is authorised and, on the direct path,
+ * taken.
  *
  * Most of what follows is driven over the real MCP pipe — raw JSON-RPC over
  * the SDK's in-memory transport pair, as D20 settled — because the refusals
@@ -9,234 +10,43 @@
  *
  * The in-memory transport rather than the spawned stdio process, for two
  * reasons: the server has to be built with a configured mandate policy (the
- * spawned one reads its key from the environment), and two of the tests reach
- * into the catalogue and the clock mid-conversation, which only works in
+ * spawned one reads its key from the environment), and several of the tests
+ * reach into the catalogue and the clock mid-conversation, which only works in
  * process. `protocol.test.ts` keeps the spawned-process suite.
+ *
+ * The payment *failures* live next door in `confirm-order.test.ts`, which owns
+ * the scripted rails: the two tools share one `settle()` (D88), so the
+ * declines, the stuck capture and the broken rail are tested once.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  AuditLog,
-  createMandatePolicy,
-  createMemoryLedger,
-  generateMandateKeyPair,
-  issue,
-  type Mandate,
-  type MandateClaims,
-  type MandatePolicy,
-} from '../../mandate/index.js';
-import { CartStore, sequentialCartIds } from '../../merchant/cart.js';
-import { CATALOGUE, type Product } from '../../merchant/catalogue.js';
-import {
-  OrderStore,
-  sequentialConfirmationTokens,
-  sequentialOrderIds,
-} from '../../merchant/order.js';
+import { createMandatePolicy, type Mandate } from '../../mandate/index.js';
+import { CATALOGUE } from '../../merchant/catalogue.js';
 import { MandateRefusedError } from '../../merchant/errors.js';
 import { placeOrder } from '../../merchant/place-order.js';
-import { QuoteStore, sequentialQuoteIds, totalOf } from '../../merchant/quote.js';
-import { createMerchantServer } from '../../merchant/server.js';
-import { createMerchantState, getQuote, type MerchantState } from '../../merchant/tools.js';
-import { StubRail, type RailLogEntry } from '../../rail/index.js';
+import { totalOf } from '../../merchant/quote.js';
+import { createMerchantState, getQuote } from '../../merchant/tools.js';
 
 import {
-  asToolResult,
-  bodyOf,
-  handshake,
-  inMemoryClient,
-  type RawClient,
-  type ToolCallResult,
-} from './support/raw-client.js';
-
-const NOW = '2026-10-28T12:00:00.000Z';
-const AGENT = 'agent-buyer-1';
-const MERCHANT = 'merchant-demo';
-const PRINCIPAL = 'user-andrea';
-const MANDATE_ID = 'mandate-t07a-1';
-
-/** 1450 minor units, 60 in stock. One of them is under every default limit. */
-const MUG = 'prod_cobbleford_mug';
-const MUG_PRICE = 1450;
-
-/** The issuer. One key pair for the whole file: nothing here rotates keys. */
-const issuer = generateMandateKeyPair();
-
-/**
- * The mandate every test starts from: this agent, this merchant, in date, with
- * room for one mug (1450) under both caps and under the confirm threshold.
- */
-function claims(overrides: Partial<MandateClaims> = {}): MandateClaims {
-  return {
-    mandate_id: MANDATE_ID,
-    principal: PRINCIPAL,
-    agent: AGENT,
-    merchant: MERCHANT,
-    currency: 'GBP',
-    amount_cap_minor: 5000,
-    per_transaction_cap_minor: 2500,
-    valid_from: '2026-10-28T00:00:00.000Z',
-    valid_until: '2026-10-29T00:00:00.000Z',
-    human_confirm_above_minor: 2000,
-    ...overrides,
-  };
-}
-
-function mandateFor(overrides: Partial<MandateClaims> = {}): Mandate {
-  return issue(claims(overrides), issuer.privateKey);
-}
-
-/** A configured merchant, its state, and a client talking to it. */
-interface Merchant {
-  readonly client: RawClient;
-  readonly state: MerchantState;
-  readonly policy: MandatePolicy;
-  /** The catalogue the server reads. Writable, so a test can sell out a line. */
-  readonly catalogue: Product[];
-  /** The stub rail the merchant pays through, and what it recorded. */
-  readonly rail: StubRail;
-  readonly railLog: RailLogEntry[];
-  /** Moves the one clock the quote store, the order store and the policy share. */
-  advance(seconds: number): void;
-  close(): Promise<void>;
-}
-
-/**
- * Builds a merchant with sequential ids, a movable clock and a mandate policy
- * that trusts the test issuer, then opens a client on it.
- *
- * `configured: false` leaves the policy out, which is a merchant that can show
- * its catalogue but cannot take orders (D60).
- */
-async function openMerchant({ configured = true } = {}): Promise<Merchant> {
-  let now = NOW;
-  const clock = (): string => now;
-
-  // A copy, because CATALOGUE is frozen and one test has to change it.
-  const catalogue: Product[] = CATALOGUE.map((product) => ({ ...product }));
-  const carts = new CartStore(catalogue, { nextId: sequentialCartIds(), now: clock });
-  const quotes = new QuoteStore(catalogue, carts, {
-    nextId: sequentialQuoteIds(),
-    now: clock,
-  });
-  const orders = new OrderStore({
-    nextId: sequentialOrderIds(),
-    nextToken: sequentialConfirmationTokens(),
-    now: clock,
-  });
-  const policy = createMandatePolicy({
-    publicKey: issuer.publicKey,
-    clock,
-    ledger: createMemoryLedger(),
-    audit: new AuditLog(),
-  });
-
-  // A stub rail with a collector for a sink, so a test can read back what the
-  // merchant asked the rail for (D54).
-  const railLog: RailLogEntry[] = [];
-  const rail = new StubRail({
-    log: (entry) => {
-      railLog.push(entry);
-    },
-  });
-
-  const state = createMerchantState({
-    catalogue,
-    carts,
-    quotes,
-    orders,
-    merchant_id: MERCHANT,
-    policy: configured ? policy : undefined,
-    rail,
-  });
-
-  const client = await inMemoryClient(() => createMerchantServer(state));
-  await handshake(client);
-
-  return {
-    client,
-    state,
-    policy,
-    catalogue,
-    rail,
-    railLog,
-    advance(seconds) {
-      now = new Date(Date.parse(now) + seconds * 1_000).toISOString();
-    },
-    close: () => client.close(),
-  };
-}
-
-/** Puts `quantity` of a product in a fresh cart and quotes it. */
-async function quoteFor(
-  merchant: Merchant,
-  productId = MUG,
-  quantity = 1,
-): Promise<{ quote_id: string; cart_id: string }> {
-  const created = asToolResult(
-    await merchant.client.request('tools/call', {
-      name: 'create_cart',
-      arguments: { items: [{ product_id: productId, quantity }] },
-    }),
-  );
-  const { cart } = bodyOf(created) as { cart: { cart_id: string } };
-
-  const quoted = asToolResult(
-    await merchant.client.request('tools/call', {
-      name: 'get_quote',
-      arguments: { cart_id: cart.cart_id },
-    }),
-  );
-  const { quote } = bodyOf(quoted) as { quote: { id: string } };
-
-  return { quote_id: quote.id, cart_id: cart.cart_id };
-}
-
-/** Calls `place_order` and hands back the tool result. */
-async function order(
-  merchant: Merchant,
-  args: Record<string, unknown>,
-): Promise<ToolCallResult> {
-  return asToolResult(
-    await merchant.client.request('tools/call', { name: 'place_order', arguments: args }),
-  );
-}
-
-/** The success body of a `place_order` call. */
-interface OrderBody {
-  readonly status: string;
-  readonly order_id: string;
-  readonly confirmation_token?: string;
-}
-
-/** The refusal body: a code, a message, and the policy reasons when there are any. */
-interface RefusalBody {
-  readonly error: {
-    readonly code: string;
-    readonly message: string;
-    readonly reasons?: { reason: string; message: string }[];
-  };
-}
-
-function successOf(result: ToolCallResult): OrderBody {
-  expect(result.isError).toBeFalsy();
-  return bodyOf(result) as unknown as OrderBody;
-}
-
-function refusalOf(result: ToolCallResult): RefusalBody['error'] {
-  expect(result.isError).toBe(true);
-  // A refusal body deliberately does not match the tool's output schema, so it
-  // travels as text only (D13).
-  expect(result.structuredContent).toBeUndefined();
-  return (bodyOf(result) as unknown as RefusalBody).error;
-}
-
-/** The reason codes of a refusal, in the order the policy reported them. */
-function reasonsOf(result: ToolCallResult): string[] {
-  const error = refusalOf(result);
-  expect(error.code).toBe('mandate_refused');
-  return (error.reasons ?? []).map((entry) => entry.reason);
-}
+  AGENT,
+  MANDATE_ID,
+  MERCHANT,
+  MUG,
+  MUG_PRICE,
+  NOW,
+  claims,
+  issuer,
+  mandateFor,
+  openMerchant,
+  order,
+  quoteFor,
+  reasonsOf,
+  refusalOf,
+  successOf,
+  type Merchant,
+} from './support/merchant-harness.js';
+import { bodyOf } from './support/raw-client.js';
 
 describe('place_order: the approved path', () => {
   let merchant: Merchant;
@@ -333,7 +143,9 @@ describe('place_order: the approved path', () => {
       { call: 'authorise', outcome: 'ok', order_ref: 'order_000001', amount_minor: MUG_PRICE },
       { call: 'capture', outcome: 'ok', order_ref: 'order_000001', amount_minor: MUG_PRICE },
     ]);
-    expect(merchant.rail.statusOf('auth_000001')).toBe('captured');
+    // And the rail is holding a settled authorisation, so a second capture of
+    // it would be refused by the rail itself (D57).
+    expect(merchant.stub?.statusOf('auth_000001')).toBe('captured');
   });
 
   it('records the spend once, for the amount the rail took (D45, D87)', async () => {
@@ -749,20 +561,10 @@ describe('place_order: stock is re-checked at order time (D17)', () => {
     await merchant.close();
   });
 
-  /** Sells out a catalogue line behind the quote's back. Nothing was reserved. */
-  function sellOut(productId: string, stock = 0): void {
-    const index = merchant.catalogue.findIndex((product) => product.id === productId);
-    const product = merchant.catalogue[index];
-    expect(product).toBeDefined();
-    if (product !== undefined) {
-      merchant.catalogue[index] = { ...product, stock };
-    }
-  }
-
   it('refuses when the stock has gone since the quote was made', async () => {
     const { quote_id } = await quoteFor(merchant);
 
-    sellOut(MUG);
+    merchant.sellOut(MUG);
     const result = await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
 
     expect(refusalOf(result).code).toBe('insufficient_stock');
@@ -773,7 +575,7 @@ describe('place_order: stock is re-checked at order time (D17)', () => {
   it('refuses when some of the stock has gone, naming what is short', async () => {
     const { quote_id } = await quoteFor(merchant, MUG, 4);
 
-    sellOut(MUG, 3);
+    merchant.sellOut(MUG, 3);
     const result = await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
 
     expect(refusalOf(result).code).toBe('insufficient_stock');
@@ -783,7 +585,7 @@ describe('place_order: stock is re-checked at order time (D17)', () => {
   it('places no order and consults no mandate when the stock has gone (D65)', async () => {
     const { quote_id } = await quoteFor(merchant);
 
-    sellOut(MUG);
+    merchant.sellOut(MUG);
     await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
 
     expect(merchant.state.orders.size).toBe(0);
