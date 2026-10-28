@@ -279,3 +279,92 @@ entry below describes what is implemented.
 - **Cost.** A reader of D06 has to reach D21 to learn that one line of its
   cost is stale, and the two entries are 150 lines apart. T10 consolidates
   this file and should fold them together then.
+
+---
+
+## T03 · Mandate types and signing
+
+T03 ran before `docs/DECISIONS.md` existed, so it recorded its five decisions
+as P1 to P5 in the description of PR #5. Andrea ruled on all five on 27 Oct.
+T06b appends them here, wording unchanged except the numbering.
+
+## D22 · Signing format: Ed25519 over a canonical serialisation of the flat mandate — ACCEPTED (Andrea, 27 Oct)
+
+(Required entry; implements D10.)
+
+- Decision: sign the canonical JSON of the mandate's claims with Ed25519, and
+  carry the result in the mandate's own `signature` field.
+- Alternative not taken: AP2's SD-JWT, where the mandate is a JWT with
+  selective-disclosure salted claim digests.
+- Why: the README mandate is a flat object every field of which the merchant
+  needs, so there is nothing to selectively disclose; Ed25519 via `node:crypto`
+  needs no dependency, and a reader can see the whole signing path in about
+  thirty lines.
+- Cost: a stated divergence from AP2. We get no selective disclosure, no JWT
+  header to negotiate algorithms with, and no interoperability with an AP2
+  verifier — if Stage 2 needs one, the signing format changes, not just the
+  encoding. T10's `docs/MANDATE.md` owes the mapping.
+
+## D23 · Canonical serialisation: sorted keys, `signature` excluded, compact JSON, UTF-8 — ACCEPTED (Andrea, 27 Oct)
+
+- Decision: strip `signature`, sort the remaining keys by UTF-16 code unit,
+  emit JSON with no insignificant whitespace, sign the UTF-8 bytes. Every field
+  *present* is signed rather than a fixed allowlist, so a field added in T12
+  (a nonce, say) is covered without editing the canonicaliser.
+- Alternative not taken: JCS (RFC 8785), or signing the exact bytes as received
+  and passing them alongside the parsed object.
+- Why: the mandate is flat and holds only strings and integers, which is the
+  subset where our rules and JCS agree; signing received bytes would mean every
+  surface that touches a mandate has to keep the original octets intact, which
+  the MCP tool boundary in T06a would make awkward.
+- Cost: this is our own rule, not a cited standard, so a non-TypeScript
+  verifier has to reimplement it from the doc comment. It would not survive
+  nested objects or floats unchanged — if the mandate stops being flat, revisit
+  before extending. Not JCS-conformant by construction, only by coincidence on
+  this field set.
+
+## D24 · Encoding: signatures base64url unpadded; public keys DER SPKI, base64url — ACCEPTED (Andrea, 27 Oct)
+
+- Decision: `signature` is the 64 raw bytes as unpadded base64url (86 chars).
+  `exportPublicKey`/`importPublicKey` move a public key as base64url DER SPKI
+  (59 chars).
+- Alternative not taken: hex, or standard base64, for the signature; raw
+  32-byte keys, PEM, or a JWK for the key.
+- Why: base64url survives JSON, URLs and MCP tool arguments with no escaping.
+  SPKI carries the algorithm with the key, so a verifier cannot be handed 32
+  bytes and talked into reading them as the wrong curve; `importPublicKey`
+  additionally rejects anything that is not Ed25519.
+- Cost: SPKI is bulkier and less obvious than raw bytes, and a reader has to
+  know what SPKI is. PEM would be more familiar but needs newline handling in
+  env vars and JSON.
+
+## D25 · `verify()` returns a result union, not a boolean, and does not throw on a bad mandate — ACCEPTED (Andrea, 27 Oct)
+
+- Decision: `verify` returns `{ ok: true } | { ok: false, reason }` with
+  `reason` one of `signature_invalid` or `mandate_malformed`. It throws only on
+  a caller error (a key that is not Ed25519). `MandateClaims` is the declared
+  unsigned type and `Mandate extends MandateClaims`, rather than
+  `Omit<Mandate, 'signature'>`.
+- Alternative not taken: return `boolean`; or throw a `MandateError` per
+  failure.
+- Why: T04 has to append every check, pass or fail, to an audit log and add its
+  own refusal reasons, which a boolean cannot carry and exceptions make
+  awkward to log uniformly. Declaring the claims type first means the README
+  fields appear once, in reading order, with their units.
+- Cost: callers must read `.ok` rather than use the value as a condition — a
+  truthy object is an easy mistake to make, and `if (verify(m, k))` is always
+  true. T04 inherits the obligation to extend the reason union rather than
+  invent a parallel error channel.
+
+## D26 · `mandate_malformed` as a distinct reason from `signature_invalid` — ACCEPTED (Andrea, 27 Oct)
+
+- Decision: an object that cannot be reduced to canonical bytes at all (an
+  empty signature, a non-finite amount) reports `mandate_malformed`: no
+  signature check was possible, as against one that was possible and failed.
+- Alternative not taken: one `signature_invalid` reason for everything, or
+  throwing.
+- Why: the audit log should distinguish a forged mandate from a broken caller;
+  they want different responses from the merchant.
+- Cost: one more reason for T04 to handle, and a thin line to hold — it is
+  structural validation, so it must not drift into the field-level checks that
+  belong to T04.
