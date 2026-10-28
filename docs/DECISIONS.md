@@ -279,3 +279,222 @@ entry below describes what is implemented.
 - **Cost.** A reader of D06 has to reach D21 to learn that one line of its
   cost is stale, and the two entries are 150 lines apart. T10 consolidates
   this file and should fold them together then.
+
+---
+
+## T05 · Stub rail
+
+The rail interface has to survive Stage 2 unchanged, so these entries lean on
+what Stripe actually does rather than on what a stub finds convenient. Pages
+opened and read on 28 Oct 2026, with the facts they settled:
+
+- <https://docs.stripe.com/payments/capture-later> — a PaymentIntent created
+  with `capture_method=manual` authorises without capturing, reaches status
+  `requires_capture`, and is captured by `POST
+  /v1/payment_intents/{id}/capture`, which "captures the total authorized
+  amount by default"; "you can only perform one capture on an authorized
+  payment for most payments"; an online card authorisation is typically valid
+  7 days and, unexpired and uncaptured, is released.
+- <https://docs.stripe.com/api/payment_intents/capture> — the id is in the
+  path; `amount_to_capture` is an optional integer "Defaults to the full
+  `amount_capturable` if it's not provided".
+- <https://docs.stripe.com/api/errors> — `type` is one of `api_error`,
+  `card_error`, `idempotency_error`, `invalid_request_error`; `decline_code`
+  is populated "For card errors resulting from a card issuer decline".
+- <https://docs.stripe.com/error-codes> — `card_declined`,
+  `insufficient_funds` and `authentication_required` are real error codes, as
+  are `charge_already_captured`, `capture_unauthorized_payment` and
+  `invalid_charge_amount` ("must be a positive integer in the smallest
+  currency unit").
+- <https://docs.stripe.com/api/idempotent_requests> — idempotency is an
+  `Idempotency-Key` HTTP request header the client generates, pruned after at
+  least 24 hours; it is not a field on the object.
+
+## D50 · A decline is a result; only a broken rail throws — PROPOSED (T05)
+
+- **Decision.** `authorise` and `capture` return
+  `{ ok: true, ... } | { ok: false, decline }`. A refusal never throws. An
+  exception from a rail means the rail itself failed — no network, bad
+  credentials, a timeout — and says nothing about the money.
+- **Alternative.** Throw a `RailError` on a decline, as `merchant/` throws
+  `MerchantError` for a refusal (D13).
+- **Why.** A decline is the normal, expected answer that the order must record
+  and the audit log must show; `mandate.verify` already returns a union rather
+  than throwing (T03's `VerifyResult`), and the rail is the same kind of
+  boundary. Keeping the two apart matters most in the case that actually hurts
+  in payments: a timeout is *not* a decline, because the payment may have gone
+  through, and code that catches both in one `catch` will quietly record a
+  successful charge as a refused card.
+- **Cost.** Two failure mechanisms at one seam, so a caller needs a branch
+  *and* a `try`. T11 has to classify every Stripe failure into one or the
+  other: by the error types above, `card_error` and `invalid_request_error`
+  become declines, `api_error` and a transport failure throw, and
+  `idempotency_error` is a caller bug that throws.
+
+## D51 · One request object per call, and no knowledge of the mandate — PROPOSED (T05)
+
+- **Decision.** `authorise` takes a single `AuthoriseRequest` of
+  `order_ref`, `amount_minor` and `currency`; it returns an `Authorisation`
+  that echoes all three plus a rail-issued `authorisation_id` and
+  `authorised_at`. Both calls are `Promise`-returning even though the stub has
+  nothing to await. `rail/` imports nothing from `mandate/` or `merchant/` and
+  declares its own `MinorUnits`, `CurrencyCode` and `Instant` aliases.
+- **Alternative.** Positional parameters (`authorise(orderRef, amount,
+  currency)`), synchronous signatures on the stub, and passing the cart or the
+  verified mandate so the rail could check the caps itself.
+- **Why.** A request object means a field can be added later without touching
+  a call site, which is the whole point of an interface that must outlive
+  Stage 1. Async because a real rail is a network call and Stage 2 must not
+  change the signature. And the rail must not see the mandate: authorisation
+  is decided *before* the money moves, by `mandate.verify` and the merchant
+  (R2, R9). A rail that could read the caps would invite a second, divergent
+  copy of the policy — and no real PSP would ever be handed the user's
+  mandate.
+- **Cost.** The amount is stated twice in a flow, once to the mandate check
+  and once to the rail, and nothing in the type system ties them together:
+  the merchant could verify 2499 and authorise 9999. T07b is where that has
+  to be got right, and its tests have to cover it. `rail/` also repeats three
+  one-line type aliases that `mandate/` already has.
+
+## D52 · `capture` takes the authorisation id and takes the lot — PROPOSED (T05)
+
+- **Decision.** `capture({ authorisation_id })`. No amount: a capture settles
+  the authorisation in full, and the `Capture` it returns carries the
+  authorisation's own `order_ref`, `amount_minor` and `currency`. There is no
+  capture id; a capture is identified by the authorisation it settled.
+- **Alternative.** `capture({ authorisation_id, amount_minor })` for partial
+  capture, or a capture that re-states the amount so the rail can check it.
+- **Why.** It is what Stripe does: the id is in the path, and capture takes
+  the full authorised amount unless `amount_to_capture` says otherwise. Full
+  capture is also the only thing this repo needs — there is no cancel and no
+  refund by the PRD, and the merchant captures exactly what it authorised.
+  Omitting the amount removes a mismatch that would otherwise need a rule
+  (what does a rail do when the capture amount differs from the hold?), and
+  because the parameter is an object (D51) adding an optional `amount_minor`
+  in Stage 2 would change no call site.
+- **Cost.** A merchant that wants to capture less than it held cannot, until
+  that optional field is added. Stripe also releases the remainder on a
+  partial capture and allows only one capture per authorisation, so partial
+  capture is a one-shot decision rather than a running balance — more
+  semantics than a Stage 1 reference wants to teach.
+
+## D53 · A decline carries a code, a message and an origin — PROPOSED (T05)
+
+- **Decision.** `RailDecline` is `{ code, message, origin }`. `code` is a
+  closed union of eight values; `origin` is `'issuer' | 'rail'`. All eight
+  codes are declared now, including three — `card_declined`,
+  `insufficient_funds`, `authentication_required` — that `StubRail` never
+  produces.
+- **Alternative.** Just `{ code, message }`, matching the merchant's error
+  body (D13) exactly; and declaring only the codes the stub can produce,
+  letting T11 widen the union.
+- **Why.** `code` plus `message` is the envelope the repo already uses, so a
+  reader learns one shape. `origin` is the distinction that only payments
+  needs and that a product reader should see named: the issuer refusing a
+  cardholder's money is a different event from the payment system rejecting a
+  malformed request, and Stripe draws exactly this line between a `card_error`
+  and an `invalid_request_error`. Declaring the issuer codes now is what keeps
+  the promise that Stage 2 changes nothing: a widened union is a changed
+  interface, and every `switch` over it would have to be revisited. The three
+  names are Stripe's own error codes, so the mapping is one-to-one, and
+  `authentication_required` is where SCA under PSD2 lands — the case this
+  whole repo exists to make visible.
+- **Cost.** Three declared codes nothing produces, which a reader may hunt
+  for; `test/rail/log.test.ts` asserts both that they are in the union and
+  that the stub never emits them, so the dead branches cannot drift
+  unnoticed. `DECLINE_CODES` also has to be kept in step with the union by
+  hand — a typed exhaustiveness check in the same test does that.
+
+## D54 · The stub logs through an injected sink, and is silent by default — PROPOSED (T05)
+
+- **Decision.** `StubRail` takes `log: (entry: RailLogEntry) => void`. It is
+  handed structured entries, not strings, and the default is
+  `discardRailLog`, which writes nowhere. `writeTo(stream)` turns any object
+  with a `write(chunk: string)` into a sink, so `writeTo(process.stderr)` is
+  the one-liner for a server, and `formatRailLogEntry` is the one-line text
+  format it uses.
+- **Alternative.** Take a `NodeJS.WritableStream` directly, as T04's
+  `AuditLog.print()` does; or default to `process.stderr` so a rail
+  constructed with no options still shows its work.
+- **Why.** The merchant runs as an MCP stdio server, where stdout carries
+  JSON-RPC frames and a stray `console.log` corrupts the protocol — so a rail
+  must never pick a destination for itself, and silence is the only safe
+  default. A callback over a stream because the entry is then a value a test
+  can assert fields on and the T09 demo can render its own way, with no
+  parsing; `writeTo` keeps the stream case to one call. Typing the stream as
+  `{ write(chunk: string) }` rather than `NodeJS.WritableStream` lets a test
+  pass a plain object.
+- **Cost.** `new StubRail()` records nothing, which looks broken until you
+  read the doc comment; the demo and every test that cares must pass a sink.
+  The rail now has a second logging path alongside T04's `AuditLog`: the
+  audit log is the record of *authorisation* decisions and this is the record
+  of what the *rail* did, which T10 should explain, or fold together.
+
+## D55 · The stub is deterministic by construction — PROPOSED (T05)
+
+- **Decision.** Default authorisation ids are sequential — `auth_000001` — and
+  the default clock starts at `STUB_RAIL_EPOCH` (`2026-01-01T00:00:00.000Z`)
+  and steps one second per call. Nothing in `StubRail` reads
+  `crypto.randomUUID` or the wall clock unless `randomAuthorisationIds` or
+  `systemClock` is injected.
+- **Alternative.** Random ids and real time by default, as `CartStore` has for
+  cart ids (D12), with determinism injected by the tests; or a frozen clock
+  with no step; or no default clock at all, so every caller must supply one.
+- **Why.** The task requires it, and the reason it is the right requirement
+  here is that a stub rail holds no money: an unguessable id protects nothing,
+  whereas a repeatable transcript is the whole value of a stub — the T09 demo
+  prints a rail log that has to look the same on every machine, and a test can
+  assert on an exact id and timestamp instead of a regular expression. This
+  does not contradict D12, which is about an id a client could use to reach
+  someone else's cart; `randomAuthorisationIds` is exported for the case where
+  a stub id does leak to an untrusted caller, and T11's ids come from Stripe.
+  The clock steps rather than freezing because an authorise and the capture
+  that settles it sharing a timestamp reads as a bug.
+- **Cost.** The default ids are guessable, so nothing may treat a stub
+  authorisation id as a secret, and the timestamps are fiction a reader must
+  not mistake for wall-clock — `2026-01-01T00:00:00.000Z` is deliberately
+  round so that it cannot be. The one-second step is arbitrary.
+
+## D56 · `order_ref` is a reference, not an idempotency key — PROPOSED (T05)
+
+- **Decision.** The rail echoes `order_ref` and logs it, and nothing more. Two
+  `authorise` calls with the same `order_ref` produce two independent
+  authorisations.
+- **Alternative.** Treat `order_ref` as an idempotency key, so a repeated
+  authorise returns the first authorisation instead of a second one.
+- **Why.** Stripe's idempotency is an `Idempotency-Key` request header the
+  client generates, with its own 24-hour-plus retention and a conflict error
+  when the parameters of a retry differ — not a field on the PaymentIntent.
+  Overloading `order_ref` with that meaning would teach a shape Stage 2 cannot
+  honour. Replay is also already somebody else's job: the PRD puts replay
+  protection in the mandate and merchant layers (R10, T12), which is where it
+  belongs, because a replayed order must be refused before any money moves,
+  not deduplicated after.
+- **Cost.** A merchant that retries `authorise` after a timeout
+  double-authorises, and the stub will cheerfully let it. Until T12 lands,
+  nothing in the repo stops that; T11 should pass a real idempotency key, and
+  an `idempotency_key` field on `AuthoriseRequest` is the natural place for it
+  (a non-breaking addition, by D51).
+
+## D57 · The rail refuses the second capture, not the merchant — PROPOSED (T05)
+
+- **Decision.** `StubRail` remembers each authorisation and its state
+  (`authorised` or `captured`) in an in-process `Map`. Capturing an unknown id
+  gives `authorisation_not_found`; capturing a settled one gives
+  `authorisation_already_captured`, with `origin: 'rail'`. The money is never
+  taken twice. `statusOf()` and `size` expose the state for tests and the
+  demo.
+- **Alternative.** A stub that captures whatever it is asked to, leaving the
+  merchant to track which orders it has already settled.
+- **Why.** A real rail enforces this — Stripe allows one capture per
+  authorisation and answers a repeat with `charge_already_captured` — so a
+  stub that did not would let T07b ship a double-capture bug that only
+  appeared against Stripe. Holding the state also makes the stub's refusals
+  the honest ones a reference reader should see: it refuses only what it
+  cannot honour, and never pretends an issuer said no.
+- **Cost.** The stub is stateful, so authorisations die with the process and
+  are never evicted, exactly as carts are (D11). An authorisation that is
+  never captured simply sits there: there is no expiry, where a real card
+  authorisation is released after about seven days, and no cancel, because the
+  interface has none by the PRD. T10 should say so, since a reader who knows
+  payments will look for it.
