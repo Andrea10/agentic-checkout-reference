@@ -1,6 +1,6 @@
 # DECISIONS — index
 
-`docs/DECISIONS.md` is 2,600 lines and append-only. This is the way in.
+`docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
 and every status, verbatim. **115 decisions, D01 to D115, with no gaps.** The
