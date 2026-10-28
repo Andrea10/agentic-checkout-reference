@@ -79,7 +79,7 @@ export type {
   OrderStatus,
 } from './order.js';
 
-export { asMandate, mandateWireSchema } from './mandate-wire.js';
+export { mandateWireSchema } from './mandate-wire.js';
 export type { MandateWire } from './mandate-wire.js';
 
 export { placeOrder, placeOrderInput, placeOrderOutput } from './place-order.js';

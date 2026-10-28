@@ -49,14 +49,20 @@ export interface MerchantState {
   readonly policy?: MandatePolicy;
 }
 
-/** What {@link createMerchantState} will build for itself if not given it. */
+/**
+ * What {@link createMerchantState} will build for itself if not given it.
+ *
+ * Every field also accepts an explicit `undefined`, so a caller can write
+ * `{ policy: policyFor(config) }` without having to branch on whether there
+ * is one.
+ */
 export interface MerchantStateOptions {
-  readonly catalogue?: readonly Product[];
-  readonly carts?: CartStore;
-  readonly quotes?: QuoteStore;
-  readonly orders?: OrderStore;
-  readonly merchant_id?: string;
-  readonly policy?: MandatePolicy;
+  readonly catalogue?: readonly Product[] | undefined;
+  readonly carts?: CartStore | undefined;
+  readonly quotes?: QuoteStore | undefined;
+  readonly orders?: OrderStore | undefined;
+  readonly merchant_id?: string | undefined;
+  readonly policy?: MandatePolicy | undefined;
 }
 
 /**

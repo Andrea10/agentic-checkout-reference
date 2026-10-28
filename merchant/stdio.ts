@@ -23,13 +23,11 @@ import { createMerchantState } from './tools.js';
 
 const config = configFromEnvironment();
 
-serveStdio(() => {
-  const policy = policyFor(config);
-  return createMerchantServer(
-    createMerchantState(
-      policy === undefined
-        ? { merchant_id: config.merchant_id }
-        : { merchant_id: config.merchant_id, policy },
-    ),
-  );
-});
+serveStdio(() =>
+  createMerchantServer(
+    createMerchantState({
+      merchant_id: config.merchant_id,
+      policy: policyFor(config),
+    }),
+  ),
+);

@@ -32,10 +32,11 @@ import { checkMandate } from '../mandate/index.js';
 
 import { findProduct, type Product } from './catalogue.js';
 import { MandateRefusedError, MerchantError } from './errors.js';
-import { asMandate, mandateWireSchema } from './mandate-wire.js';
+import { mandateWireSchema } from './mandate-wire.js';
 import { ORDER_STATUSES, type OrderFacts, type OrderLine } from './order.js';
 import { totalOf, type Quote } from './quote.js';
 
+import type { Mandate } from '../mandate/index.js';
 import type { MerchantState } from './tools.js';
 
 export const placeOrderInput = z.object({
@@ -72,7 +73,21 @@ export const placeOrderOutput = z.object({
     .describe('Present only when the status is awaiting_confirmation.'),
 });
 
-export type PlaceOrderArgs = z.infer<typeof placeOrderInput>;
+/**
+ * The arguments, as the handler wants them.
+ *
+ * Written out rather than inferred from {@link placeOrderInput}, so that
+ * `mandate` is the mandate layer's own {@link Mandate} type and not a zod
+ * shape with an index signature on it. The registration in `server.ts` is
+ * where the two meet: it fails to compile if the schema stops describing a
+ * mandate, which is the check `asMandate` used to make by hand.
+ */
+export interface PlaceOrderArgs {
+  readonly quote_id: string;
+  readonly agent: string;
+  readonly mandate: Mandate;
+}
+
 export type PlaceOrderResult = z.infer<typeof placeOrderOutput>;
 
 /**
@@ -109,7 +124,7 @@ export function placeOrder(state: MerchantState, args: PlaceOrderArgs): PlaceOrd
   };
 
   const decision = checkMandate(policy, {
-    mandate: asMandate(args.mandate),
+    mandate: args.mandate,
     agent: facts.agent,
     merchant: facts.merchant,
     amount_minor: facts.amount_minor,

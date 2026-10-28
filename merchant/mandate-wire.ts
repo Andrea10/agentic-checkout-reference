@@ -55,12 +55,10 @@ export const mandateWireSchema = z.looseObject({
 export type MandateWire = z.infer<typeof mandateWireSchema>;
 
 /**
- * The parsed argument, as the mandate layer wants it.
- *
- * A function rather than a cast: it compiles only while the schema above still
- * describes every field of {@link Mandate}, so adding a field to the mandate
- * without adding it here is a build error rather than a runtime surprise.
+ * The parsed argument is handed straight to the mandate layer as a
+ * {@link Mandate}: `place_order` declares its `mandate` argument with that
+ * type, so the registration in `server.ts` fails to compile if the schema
+ * above stops describing one. Adding a field to the mandate without adding it
+ * here is a build error rather than a runtime surprise.
  */
-export function asMandate(wire: MandateWire): Mandate {
-  return wire;
-}
+export type { Mandate };
