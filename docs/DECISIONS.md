@@ -2156,3 +2156,252 @@ bank (D55).
   from `stdio.ts` also records nothing about its payments anywhere, which looks
   broken until you read this entry or D54 — the demo is where that gets fixed,
   and T09 has to remember to.
+
+## D100 · The demo hosts the merchant in its own process — PROPOSED
+
+- **Decision.** `npm run demo` builds the merchant inside the demo process and
+  reaches it over the MCP SDK's `InMemoryTransport` pair, which
+  `agent/connect(transport)` already accepts. The demo therefore holds the
+  `MandatePolicy` it configured the merchant with, and can print that policy's
+  audit log. The process path — a spawned `merchant/stdio.ts` reading its
+  configuration from the environment — is covered by
+  `scripts/stdio-smoke.test.ts` instead, which runs the same agent against the
+  same plan and asserts a paid order.
+- **Alternative.** Start `merchant/stdio.ts` as a child process, as
+  `agent/client.ts` and `merchant/stdio.ts` both anticipated, and have the
+  child print its own audit log to its stderr for the parent to relay.
+- **Why.** The audit log lives in the merchant's policy, in the merchant's
+  process, and it is half of what the demo exists to show: the PRD's R5 and
+  the README both promise that every mandate check is written down. A stdio
+  child cannot hand its log to the demo, and relaying it would mean the demo
+  printing a stream it cannot order against its own narration — the log lines
+  would arrive whenever the child flushed, not where the text needs them. The
+  in-memory transport is the SDK's own answer to "a server without a process",
+  and `agent/connect` exists because T08 needed exactly this.
+- **Cost.** The demo does not exercise a process boundary, a pipe, or
+  `serveStdio`'s era negotiation, so it proves less than the command looks
+  like it proves — and it negotiates MCP **2025-11-25** rather than the
+  2026-07-28 a spawned merchant gives (D75), which the output says plainly.
+  The smoke test is what keeps the real path covered, and it is one test
+  rather than a second demo. The demo also sees state no MCP client could
+  reach: the policy, the ledger and the order store. That is honest for a
+  process that *is* the merchant, but a reader has to notice which side of the
+  seam each printed fact came from, so the sections say so.
+
+## D101 · Two MCP clients, two server instances, one merchant state — PROPOSED
+
+- **Decision.** The demo opens a fresh `McpServer` over the shared
+  `MerchantState` for every connection, and opens two of them in run 2: one
+  the agent shops on, and one the principal uses to call `confirm_order`. The
+  agent's connection is closed before the principal's is opened.
+- **Alternative.** Reuse the agent's one connection for the confirmation. Or
+  connect two clients to a single `McpServer`, which the SDK refuses ("use a
+  separate Server instance per connection"). Or call `confirmOrder(state, …)`
+  as a function, bypassing MCP.
+- **Why.** The confirmation is the principal's step, and the whole argument of
+  the human-confirm threshold is that it is made by someone who is not the
+  agent (D61, D74). A demo that confirmed down the agent's own channel would
+  print the right words over the wrong wiring. Sharing the state behind two
+  server instances is also what a real merchant is: one backend, many
+  connections — the per-connection isolation in `merchant/stdio.ts` is a
+  property of that entry point, not of the merchant.
+- **Cost.** It diverges from `stdio.ts`, where one connection means one cart
+  store and one ledger (D11, D60), so the demo shows a sharing model the
+  shipped entry point does not have. The principal's client also holds the
+  full tool surface, including `place_order`, where a real one would hold a
+  confirmation endpoint and nothing else; the demo relies on it calling only
+  the one tool rather than on being unable to call the others.
+
+## D102 · The whole demo, audit log included, goes to stdout — PROPOSED
+
+- **Decision.** `runDemo()` takes one `OutputStream` and writes everything to
+  it — narration, steps, order, rail log and the audit log, the last through
+  `AuditLog.print(stream)` with a small indenting adapter. The entry point
+  passes `process.stdout`.
+- **Alternative.** The audit log to `process.stderr`, which is what
+  `mandate/audit.ts` anticipated for the demo, with the narration on stdout.
+- **Why.** The reason `print()` has no default stream (D46) is that the
+  merchant may be an MCP stdio server, where stdout carries protocol frames.
+  In this demo the merchant is reached over an in-memory transport (D100), so
+  no part of this process's stdout is a protocol channel and the hazard does
+  not exist. What does exist is a reader: splitting the output across two
+  streams means `npm run demo > demo.txt` loses the audit log, and on a
+  terminal the two streams interleave in an order nothing guarantees. The log
+  is the point of the demo, not a diagnostic beside it.
+- **Cost.** The file comment in `mandate/audit.ts` says the demo passes
+  `process.stderr`, and it no longer does; the code is unaffected — `print()`
+  still takes the stream — but the sentence is now wrong, and T10 should
+  correct it (this task may not edit `mandate/`). A caller that wants the
+  stderr split still has it: `runDemo()` takes the stream, so the choice is
+  one argument away.
+
+## D103 · Determinism: fixed clock, fixed ids, and no key material printed — PROPOSED
+
+- **Decision.** Two runs of `npm run demo` print byte-identical text. The
+  merchant's cart, quote and order stores and the mandate policy all read
+  `fixedClock('2026-10-25T09:00:00.000Z')`; ids come from
+  `sequentialCartIds`, `sequentialQuoteIds`, `sequentialOrderIds` and
+  `sequentialConfirmationTokens`; each run's `mandate_id` is a literal; the
+  stub rail keeps its own deterministic defaults (D89). The Ed25519 key pair
+  is generated fresh in memory on every run, and **nothing derived from it is
+  printed** — not the private key, not the public key, not the signature,
+  which appears in the mandate's JSON as
+  `<Ed25519 over the ten fields above, base64url — not printed>`.
+  `scripts/demo.test.ts` pins the byte-identical property and searches the
+  output for every encoding of both halves of an injected key pair.
+- **Alternative.** A fixed key pair, committed to the repository so the
+  signature and the public key could be printed and asserted on.
+- **Why.** A committed private key in a public reference implementation is a
+  bad habit even when the key secures nothing: it trains the reader's eye to
+  accept one, and it trips every secret scanner that ever looks at the repo.
+  `generateMandateKeyPair()` takes no seed and this task may not change
+  `mandate/`, so a fixed pair would have to be a literal in `scripts/`.
+  Generating one and printing nothing from it gets the determinism without the
+  literal — and a signature is 86 characters of base64url that no reader can
+  check by eye, so withholding it costs the output nothing.
+- **Cost.** What is **not** deterministic, and what a reader should therefore
+  not expect to be stable: the mandate's signature and the key pair behind it
+  (new on every run, never printed); the negotiated MCP revision and the
+  merchant's reported version, which are whatever the pinned SDK answers; and
+  wall-clock duration. The frozen clock also means the demo always prints
+  dates in October 2026, which will read as stale from 2027 onward — the
+  output says the clock is frozen, and the alternative is a demo whose text
+  changes every day and whose README mandate expires.
+
+## D104 · The rail's transcript is collected, not written to stderr — PROPOSED
+
+- **Decision.** The demo passes the stub rail a `RailLogSink` that appends to
+  an array, and prints that array as its own section after the order. It does
+  not pass `writeTo(process.stderr)`.
+- **Alternative.** `new StubRail({ log: writeTo(process.stderr) })`, which is
+  what D89's reasoning expected T09 to do.
+- **Why.** Same reason as D102 one level down: a sink that writes straight to
+  a stream puts its lines wherever the rail happens to be called, which is in
+  the middle of a tool call, between the demo's own sections. Collecting them
+  lets the demo print "here is what the rail did for this order" under a
+  heading, next to the amount it captured. `RailLogSink` is a callback for
+  precisely this reason (D54) — `writeTo` is one of its uses, not its
+  definition.
+- **Cost.** The demo holds the rail's entries in memory, which a long-running
+  merchant would not, and a rail that threw before returning would leave the
+  section empty rather than showing a partial line on stderr. Neither matters
+  for a two-order demo on a stub.
+
+## D105 · The stdio smoke test builds its own transport — PROPOSED
+
+- **Decision.** `scripts/stdio-smoke.test.ts` constructs the SDK's
+  `StdioClientTransport` directly, with `env` set to
+  `getDefaultEnvironment()` plus `ACR_MERCHANT_ID` and
+  `ACR_MANDATE_PUBLIC_KEY`, and hands it to `agent/connect(transport)`.
+- **Alternative.** Use `agent/connectStdio({ command, args })`, which is the
+  agent's own stdio helper.
+- **Why.** The merchant needs a trusted issuer key in its environment to
+  accept an order at all (D60), and `connectStdio`'s `StdioServerCommand` has
+  no `env` field — the SDK's default environment is a safe allowlist, so an
+  `ACR_*` variable set in the parent does not reach the child. `connect` is
+  the seam that exists for a caller holding its own transport, so the test
+  uses it rather than this task editing `agent/`.
+- **Cost.** The test does not exercise `connectStdio`, so the one helper a
+  reader would reach for is covered only by `test/agent/protocol.test.ts`,
+  against a merchant with no issuer configured. Giving `StdioServerCommand` an
+  optional `env` is a small, obvious change to `agent/client.ts` and a
+  candidate for T10 or Stage 2; it is outside this task's directories.
+
+## D106 · The two runs differ by exactly one mandate field — PROPOSED
+
+- **Decision.** Both runs buy the same basket with the same planner —
+  `scriptedPlanner()` with its shipped default choice, the two cheapest
+  products — under mandates that are identical except for
+  `human_confirm_above_minor`: 3000 in run 1, the README's 2000 in run 2. The
+  basket is 2045 pence, so the threshold is the only thing that decides
+  whether a human is asked.
+- **Alternative.** Name the two products with `pickIds(...)`, as
+  `agent/scripted.ts` anticipated the demo would. Or vary the basket between
+  the runs — a cheap one that passes and an expensive one that does not.
+- **Why.** A demo that changed both the basket and the mandate would leave a
+  reader unsure which one mattered. Holding everything else still makes the
+  argument in one line: the same agent, the same cart, the same price, and the
+  outcome turns on a number the principal chose. `twoCheapest` rather than
+  `pickIds` because it is the planner's default, it is already deterministic
+  (ties broken on product id, D79), and "the agent picked the two cheapest"
+  is a sentence about an agent making a choice rather than about a demo
+  hard-coding one.
+- **Cost.** The demo never shows a refusal — no expired mandate, no wrong
+  merchant, no breached cap — so the third of the policy's three answers is
+  visible only in the tests (`test/mandate/policy.test.ts`,
+  `test/merchant/place-order.test.ts`) and in PRD R10, which is Stage 2. A
+  third run would show it; the task asked for two, and a refusal is better
+  read as a test than as a paragraph.
+
+## D107 · Money is printed as pounds and pence beside the minor units — PROPOSED
+
+- **Decision.** Every amount in the demo's output is rendered
+  `£20.45 (2045 pence)`, by `money()` in `scripts/demo.ts`. `pounds()` does
+  the conversion with integer arithmetic — `Math.trunc(minor / 100)` and
+  `minor % 100` — and never produces a float.
+- **Alternative.** Minor units only, which is what every number in the
+  repository actually is. Or pounds only, which is what a person reads. Or
+  `Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' })`.
+- **Why.** Both halves are load-bearing for different readers: the pounds are
+  what a person checks against the mandate they signed, and the pence are the
+  only thing any field in this repository holds (D16). Printing one would make
+  the other a translation the reader has to do. `Intl` is not used because its
+  output depends on the runtime's ICU data and on the host locale's grouping
+  and spacing, which would make the demo's text non-deterministic across
+  machines (D103) for the sake of a thousands separator.
+- **Cost.** Every amount costs about fifteen characters, so lines are longer
+  than they would be otherwise, and the formatter is GBP-only: it hard-codes
+  `£` and two decimal places, which is wrong for a zero-decimal currency and
+  wrong for anything but Stage 1's single currency (D16). It is a demo
+  formatter and lives in `scripts/`, not in `mandate/` or `merchant/`.
+
+## D108 · The demo configures its merchant through `configFromEnvironment` — PROPOSED
+
+- **Decision.** The demo exports the issuer's public key with
+  `exportPublicKey()`, puts it in a synthetic environment object beside
+  `ACR_MERCHANT_ID`, and reads both back with `configFromEnvironment(env)`.
+  The policy is then built with `createMandatePolicy({ publicKey, clock })`
+  rather than with `policyFor(config)`.
+- **Alternative.** Hand the `KeyObject` straight to `createMandatePolicy`,
+  skipping the environment entirely — the demo has the key pair in scope. Or
+  set the variables on the real `process.env` so `configFromEnvironment()`
+  reads them from there.
+- **Why.** The export-to-string-and-import-back round trip is the one the
+  shipped entry point makes (D60), and it is worth exercising: a demo that
+  passed the key object directly would never catch an encoding that
+  `importPublicKey` cannot read. A synthetic object rather than the real
+  `process.env` because `configFromEnvironment` takes one for exactly this
+  reason, and mutating the process environment in a function a test calls four
+  times is a side effect waiting to leak. `policyFor` is not used because it
+  takes no clock, and the frozen clock is what makes the output reproducible
+  (D103).
+- **Cost.** The policy is assembled in two steps where `policyFor(config)` is
+  one, so a reader following the configuration path has to notice why the
+  demo stops short of it. The `undefined` branch of
+  `MerchantConfig.issuerPublicKey` also has to be handled in the demo even
+  though the demo just put the key there, which is one unreachable-looking
+  throw in `startMerchant()`.
+
+## D109 · `scripts/demo.ts` is a module with an entry guard — PROPOSED
+
+- **Decision.** `scripts/demo.ts` exports `runDemo(stream, options?)`, which
+  returns a `DemoReport` of what both runs produced, and runs itself only
+  under an `import.meta.url === process.argv[1]` guard — the shape T01's
+  placeholder had (D03). `scripts/demo.test.ts` calls `runDemo()` with a
+  collecting stream, so the tests drive the same code `npm run demo` does.
+- **Alternative.** A script that writes to `console.log` and returns nothing,
+  tested by spawning `npm run demo` and matching its stdout.
+- **Why.** The demo is the PRD's S1 and S2 success criterion, so it needs
+  tests that fail when it breaks — and a demo tested only through a spawned
+  process can be asserted on only by pattern-matching its prose, which makes
+  every wording change a test failure. Returning a report lets the assertions
+  name the outcome, the order id and the audit outcomes, and keeps the text
+  assertions to the few phrases that are themselves promises (that the
+  confirmation is the human's step, that amounts carry both forms).
+- **Cost.** `runDemo` has a return type that exists only for the tests, and
+  the demo's own narration is checked by a handful of `toContain` assertions
+  that will need updating when the wording changes — deliberately few, but not
+  zero. The spawned-process path is not tested at all: nothing asserts that
+  `npm run demo` exits 0, which is checked by hand in the fresh-clone run
+  recorded in the pull request, and by CI only to the extent that the build
+  compiles the file.
