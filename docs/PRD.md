@@ -1,6 +1,6 @@
 # PRD: agentic-checkout-reference
 
-*v0.4, 28 Oct 2026. Author: Andrea Caputo.*
+*v0.5, 28 Oct 2026. Author: Andrea Caputo.*
 
 ## 0. In plain words
 
@@ -80,7 +80,7 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 
 ## 8. Standards position
 
-- **MCP:** built on spec revision 2026-07-28 and TypeScript SDK v2 (D09). Sampling, Roots and Logging are deprecated in that revision, so the design does not use them.
+- **MCP:** built on spec revision 2026-07-28 and TypeScript SDK v2 (D09). Sampling, Roots and Logging are deprecated in that revision, so the design does not use them. A TypeScript v2 client negotiates 2026-07-28 against the merchant's stdio entry point; a server mounted without `serveStdio` serves 2025-11-25 (verified by test, D75).
 - **ACP:** merchant objects follow the ACP product-feed and checkout vocabulary where it fits (spec 2026-04-17). Each divergence is a PROPOSED decision.
 - **AP2:** the closest concepts are its Checkout Mandate and Payment Mandate. The repo keeps a flat mandate for Stage 1 and documents the gap (D10); T10 adds a field-by-field mapping.
 
@@ -90,7 +90,6 @@ Sources and the dates they were read are in `SOURCES.md`.
 
 - **Open:** how the human confirmation is delivered in a real product (the repo models a token only); nonce versus order-id for replay protection (T12).
 - **Open:** mandate revocation. The repo relies on expiry. A revoked-id check in the policy step is the likely design; a candidate task for Stage 2. UNVERIFIED: how AP2 handles revocation.
-- **UNVERIFIED:** the modern 2026-07-28 opening exchange is not yet exercised by a test (T08 covers it).
 - **Risk:** specs move. Mitigation: `SOURCES.md` records dates read, and claims are re-verified before they are cited.
 - **Risk:** the repo is read as a conformance claim. Mitigation: the non-goals and divergence notes say plainly that it is not.
 
