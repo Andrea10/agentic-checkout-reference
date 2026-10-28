@@ -1647,17 +1647,14 @@ D70 to D79 are T08's, the buyer agent. All PROPOSED.
 
 ---
 
-## T08 round 2 · what `place_order` landing changed in D70 to D79 — PROPOSED
+D90 to D93 are T08's second round, written after T07a's `place_order` merged
+into main while T08 was in review. Each one amends an entry in T08's own
+D70 to D79 range, which was already full; Andrea gave this round its own
+numbers (28 Oct) rather than have the changes sit as unnumbered prose.
+**D70 to D79 are unchanged** — read each entry below as amending the one it
+names, and T10 may fold each into its target when it consolidates.
 
-T07a merged while T08 was in review. This section records what that changed
-in T08's own entries above. It is an **addendum, not an edit**: `D70` to `D79`
-is the whole of T08's allotted range and every number in it is spent, so there
-was no number left to take, and this file is append-only. Nothing above has
-been altered — read each entry below as amending the one it names. Andrea may
-rule on this section together with the entries it touches, or fold it into
-them when T10 consolidates.
-
-### Amends D76 · the stub is no longer standing in for the tool
+## D90 · Amends D76: the stub no longer stands in for `place_order`, and is kept for two bodies only — PROPOSED
 
 D76 was written when `place_order` was not on main, and its reasoning leaned
 on that: the agent's order step ran against a stub, and `flow.test.ts` drove
@@ -1672,27 +1669,39 @@ elsewhere. Both halves of that are now out of date.
   with `error.reasons` naming every failed check. It also covers
   `quote_already_ordered` (D64) and `merchant_misconfigured` (D60).
 - The seam D76 argued for held up, which is the part worth keeping: moving
-  from stub to real tool changed the test's **arguments**, not `agent/order.ts`.
-  The function was already written against a `ToolCaller`.
+  from stub to real tool changed the test's **arguments**, not
+  `agent/order.ts`. The function was already written against a `ToolCaller`.
 
-The stub survives, much smaller, for the one job the real merchant cannot do:
-answering with a body a well-behaved merchant never sends. Two of those are
-claims about the agent and nothing else — an approved order whose status word
-is **not** `approved` (T07b's paid path, which the agent must carry through
-rather than reject), and a success body that is neither documented shape,
-which must throw rather than become a refusal (D73). Its input schema is now
-the merchant's own `mandateWireSchema`, imported rather than copied, so a
-field added to the mandate reaches the stub with nobody remembering to update
-it. That also deleted a cast: the merchant's schema already parses to a
-`Mandate`.
+- **Decision.** Keep the stub, cut to a third of its size, for the one job the
+  real merchant cannot do: answering with a body a well-behaved merchant never
+  sends. Two of those are claims about the agent and nothing else — an approved
+  order whose status word is **not** `approved` (T07b's paid path, which the
+  agent must carry through rather than reject), and a success body that is
+  neither documented shape, which must throw rather than become a refusal
+  (D73). Its input schema is now the merchant's own `mandateWireSchema`,
+  imported rather than copied, so a field added to the mandate reaches the stub
+  with nobody remembering to update it. That also deleted a cast: the
+  merchant's schema already parses to a `Mandate`.
+- **Alternative.** Delete the stub outright, now that the real tool has
+  shipped — the tidier-looking option, and the one the pre-review raised. The
+  other alternative, keeping it standing in for `place_order` as before, is
+  simply worse than testing against the real thing and was never in question.
+- **Why.** Deleting it would take those two tests with it, and they are the
+  agent's only coverage for meeting a merchant it was not compiled against —
+  which is the normal case for a buyer agent and the whole premise of D77. The
+  real merchant cannot produce either body, by construction: a well-behaved
+  merchant is exactly the thing that never sends them. So the choice is
+  between 116 lines and having no test at all for the case the agent is most
+  likely to meet in the world.
+- **Cost.** A test helper now imports from `merchant/`, so a breaking change
+  there breaks a test in `test/agent/`. That is the right direction for a file
+  whose purpose is to imitate the merchant, and it is the opposite of what the
+  agent itself does (D77) — a reader should not take the stub's import as
+  licence for the agent to do the same. The stub also has to be kept honest by
+  hand: nothing stops it drifting into answering things the real merchant
+  would, which would quietly turn it back into the stand-in D90 just retired.
 
-**Cost.** A test helper now imports from `merchant/`, so a breaking change
-there breaks a test in `test/agent/`. That is the right direction for a file
-whose purpose is to imitate the merchant, and it is the opposite of what the
-agent itself does (D77) — a reader should not take the stub's import as
-licence for the agent to do the same.
-
-### Amends D76 and D77 · the refusal list is `error.reasons`, and only that
+## D91 · Amends D76 and D77: the refusal list is `error.reasons`, and only that — PROPOSED
 
 D76's cost paragraph pointed at an UNVERIFIED note about which field
 `place_order` would use for the failed mandate checks. **It is `error.reasons`,
@@ -1719,7 +1728,7 @@ it, and `toErrorBody` fills it only on `mandate_refused`.
   behaviour for `refusals`, so the choice is recorded where it would be
   rediscovered.
 
-### Amends D77 · money off the wire is read as `number`, not `int`
+## D92 · Amends D77: money off the wire is read as `number`, not `int` — PROPOSED
 
 - **Decision.** The money fields in `agent/wire.ts` are `z.number()`. Counts —
   `quantity` and `cart_version` — stay `z.int()`.
@@ -1740,7 +1749,7 @@ it, and `toErrorBody` fills it only on `mandate_refused`.
   and let the merchant refuse it, where the old code failed at the quote. One
   more round trip, in exchange for a refusal that names the real problem.
 
-### Amends D70 · one call site for the merchant's stores
+## D93 · Amends D70: one builder for the merchant's stores, with the ids asserted by name — PROPOSED
 
 T07a replaced `createMerchantState`'s positional arguments with an options
 object (D60). That change was caught by the compiler — three arguments where
@@ -1758,16 +1767,25 @@ test named `cart_000001` and failed. The pre-review flagged the same hazard
 for this round, which is the right instinct: the compiler cannot see a
 positional-to-options migration when every field is optional.
 
-So every construction now goes through one builder,
-`deterministicMerchant()` in `test/agent/harness.ts`, which sets the cart,
-quote, order and confirmation-token factories and a mandate policy on a
-frozen clock. Two tests assert `cart_000001`, `quote_000001` and
-`order_000001` by name, so a factory that stops arriving fails a test rather
-than silently weakening one.
-
-**Cost.** The agent suites share one merchant builder, so a test wanting a
-different merchant passes options rather than assembling stores itself. That
-is the trade D60 already made one level down. The general lesson is the part
-worth keeping: when an options object is entirely optional, the test that
-proves the options arrived has to assert on their **effect** — a named id —
-and never on the shape of the call.
+- **Decision.** Every construction of the merchant's stores goes through one
+  builder, `deterministicMerchant()` in `test/agent/harness.ts`, which sets the
+  cart, quote, order and confirmation-token factories and a mandate policy on a
+  frozen clock. Tests assert `cart_000001`, `quote_000001`, `order_000001` and
+  `confirm_000001` **by name**.
+- **Alternative.** Fix the three call sites where they stand, each assembling
+  its own stores with its own factories — the smaller diff, and what the
+  compiler error strictly asked for.
+- **Why.** The compiler error was never the real problem; the dropped factory
+  was, and that one is invisible. Three call sites are three chances to drop a
+  factory again on the next migration, and a test that asserts nothing about
+  an id cannot tell you it happened. One builder means one place to follow when
+  `createMerchantState` changes again, and asserting the ids by name means a
+  factory that stops arriving **fails a test** rather than silently weakening
+  one. D70's seam is what made this cheap: the tests needed a merchant, not a
+  rewrite.
+- **Cost.** The agent suites share one merchant builder, so a test wanting a
+  different merchant passes options rather than assembling stores itself. That
+  is the trade D60 already made one level down. The general lesson is the part
+  worth keeping: when an options object is entirely optional, the test that
+  proves the options arrived has to assert on their **effect** — a named id —
+  and never on the shape of the call.
