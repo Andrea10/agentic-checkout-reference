@@ -149,6 +149,17 @@ export function money(minor: number): string {
   return `${pounds(minor)} (${String(minor)} pence)`;
 }
 
+/**
+ * `n` things, named, with the plural the English needs.
+ *
+ * Small, but it is what keeps a printed sentence from disagreeing with the
+ * number printed above it: every count in the output is read off the thing
+ * being counted rather than written down twice.
+ */
+export function count(n: number, singular: string, plural = `${singular}s`): string {
+  return `${String(n)} ${n === 1 ? singular : plural}`;
+}
+
 // --- printing -------------------------------------------------------------
 
 /**
@@ -466,6 +477,29 @@ function describeOrderOutcome(result: RunResult): string {
   }
 }
 
+/** The revision the opening exchange settled on, as the connection reports it. */
+interface Negotiated {
+  readonly version: string | undefined;
+  readonly era: string | undefined;
+}
+
+/**
+ * What the agent and the merchant agreed to speak.
+ *
+ * Read off {@link MerchantConnection.protocolVersion} rather than stated,
+ * because the whole point of printing it is that the in-process route and the
+ * stdio route answer differently and a reader should see which one this is
+ * (D75, D100).
+ */
+function printConnection(p: Printer, negotiated: Negotiated): void {
+  p.section('THE CONNECTION — what the agent and the merchant agreed to speak');
+  p.field('MCP revision', `${negotiated.version ?? 'unknown'} (era ${negotiated.era ?? 'unknown'})`);
+  p.item('That is the in-memory transport\u2019s answer \u2014 an McpServer reached inside');
+  p.item('this process serves the 2025-era handshake \u2014 whereas a merchant spawned');
+  p.item('from merchant/stdio.ts negotiates 2026-07-28, which D75 records and');
+  p.item('scripts/stdio-smoke.test.ts asserts.');
+}
+
 // --- what the merchant sold and what the rail did ------------------------
 
 /** The basket, the total, and what the mandate has left afterwards. */
@@ -512,12 +546,25 @@ function printRail(p: Printer, merchant: DemoMerchant): void {
  *
  * Whatever the log holds is what comes out: the format is `formatEntry`'s and
  * the entries are the policy's, so entries another task adds appear here
- * without this file changing.
+ * without this file changing. The heading and the count say "check and
+ * settlement" because since T07c the log holds both kinds (D94) — a decision
+ * about a mandate, and what the rail then did about the money. Neither this
+ * function nor the heading names a number: both are read off the log.
  */
 function printAudit(p: Printer, merchant: DemoMerchant): void {
-  p.section('THE AUDIT LOG — every mandate check, pass or fail');
+  p.section('THE AUDIT LOG — every mandate check and every settlement, pass or fail');
   merchant.policy.audit.print(indented(p.out, '  '));
-  p.item(`${String(merchant.policy.audit.size)} entr${merchant.policy.audit.size === 1 ? 'y' : 'ies'}. Append-only: nothing here is ever edited.`);
+  p.item(
+    `${count(merchant.policy.audit.size, 'entry', 'entries')}. Append-only: nothing here is ever edited.`,
+  );
+  p.item('A check names the two parties; a settlement names the order it paid.');
+}
+
+/** How many entries of each kind the log holds. Counted, never assumed. */
+function auditTally(merchant: DemoMerchant): { checks: number; settlements: number } {
+  const entries = merchant.policy.audit.entries();
+  const checks = entries.filter((entry) => entry.kind === 'mandate_check').length;
+  return { checks, settlements: entries.length - checks };
 }
 
 // --- the two runs ---------------------------------------------------------
@@ -553,7 +600,11 @@ function auditOutcomes(merchant: DemoMerchant): readonly string[] {
 async function shop(
   merchant: DemoMerchant,
   identity: AgentIdentity,
-): Promise<{ result: RunResult; records: readonly CallRecord[] }> {
+): Promise<{
+  result: RunResult;
+  records: readonly CallRecord[];
+  negotiated: Negotiated;
+}> {
   const connection = await merchant.open();
   try {
     const records: CallRecord[] = [];
@@ -562,7 +613,11 @@ async function shop(
       caller: recording(connection, records),
       identity,
     });
-    return { result, records };
+    return {
+      result,
+      records,
+      negotiated: { version: connection.protocolVersion, era: connection.protocolEra },
+    };
   } finally {
     await connection.close();
   }
@@ -582,7 +637,8 @@ async function runOne(p: Printer, keys: MandateKeyPair, encodedPublicKey: string
   describeMandate(p, mandate);
   printMandateJson(p, mandate);
 
-  const { result, records } = await shop(merchant, { agent: AGENT, mandate });
+  const { result, records, negotiated } = await shop(merchant, { agent: AGENT, mandate });
+  printConnection(p, negotiated);
   printSteps(p, result, records);
 
   const paid = result.outcome.kind === 'ordered' ? result.outcome.order : undefined;
@@ -701,9 +757,17 @@ async function runTwo(p: Printer, keys: MandateKeyPair, encodedPublicKey: string
   );
   printRail(p, merchant);
   printAudit(p, merchant);
-  p.item('Two entries, not one: the policy was asked when the order was held');
-  p.item('and asked again when the token came back, because the window, the');
-  p.item('caps and the budget can all have moved in between (D83).');
+
+  // Read off the log rather than written down: a sentence that counted for
+  // itself was wrong the moment T07c added a settlement entry (D94).
+  const tally = auditTally(merchant);
+  p.item(
+    `${count(tally.checks, 'mandate check')} and ${count(tally.settlements, 'settlement')} above.`,
+  );
+  p.item('The policy was asked when the order was held and asked again when');
+  p.item('the token came back, because the window, the caps and the budget');
+  p.item('can all have moved in between (D83). The settlement is the payment');
+  p.item('they authorised between them.');
 
   return {
     agentOutcome: result.outcome.kind,

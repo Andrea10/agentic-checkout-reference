@@ -14,9 +14,16 @@
  * 4. **The audit log comes out on the stream the demo was handed**, rather
  *    than on a stream of its own choosing.
  *
- * Nothing here pins the *number* of audit entries beyond "at least one per
- * check made", because T07c adds payment events to the same log and this
- * suite must not break when it lands.
+ * T07c has landed, so the log holds two kinds of entry (D94): a mandate
+ * check and a settlement. Three of the tests below exist because this demo
+ * was wrong about that log until the merge — the heading that named only
+ * checks, a sentence that counted the entries for itself, and D100's claim
+ * that the demo printed the revision it negotiated. Each is pinned so it
+ * cannot come back:
+ *
+ * - "the heading covers both kinds of entry"
+ * - "the tally under the log is read off the log"
+ * - "prints the MCP revision the connection negotiated"
  */
 
 import { describe, expect, it } from 'vitest';
@@ -67,11 +74,12 @@ describe('run 1: the mandate covers the basket', () => {
     expect(report.one.spentMinor).toBe(BASKET_MINOR);
   });
 
-  it('wrote one allow to the audit log, before anything T07c adds', async () => {
+  it('wrote the decision and then the settlement to the audit log', async () => {
     const { report } = await demo();
 
-    expect(report.one.auditOutcomes[0]).toBe('allow');
-    expect(report.one.auditOutcomes).toContain('allow');
+    // The whole log for this run since T07c (D94): the policy allowed it,
+    // and the rail then took the money.
+    expect(report.one.auditOutcomes).toEqual(['allow', 'paid']);
   });
 });
 
@@ -91,12 +99,15 @@ describe('run 2: the README mandate trips the human-confirm step', () => {
     expect(report.two.spentMinor).toBe(BASKET_MINOR);
   });
 
-  it('checked the mandate twice: once at the hold, once at the confirmation', async () => {
+  it('checked the mandate twice, then settled once', async () => {
     const { report } = await demo();
 
-    expect(report.two.auditOutcomes.slice(0, 2)).toEqual([
+    // Once when the order was held, once when the token came back (D83),
+    // and one settlement for the payment they authorised (D94).
+    expect(report.two.auditOutcomes).toEqual([
       'confirm_required',
       'confirm_required',
+      'paid',
     ]);
   });
 
@@ -144,6 +155,61 @@ describe('the printed output', () => {
       /2026-10-25T09:00:00\.000Z {2}allow {13}2045 GBP {2}agent-buyer-1 -> merchant-demo/,
     );
     expect(text).toContain('confirm_required');
+  });
+
+  it('the heading covers both kinds of entry the log holds (D94)', async () => {
+    const { report, text } = await demo();
+
+    // The log really does hold both kinds, so the heading is not vacuous:
+    // `allow`/`confirm_required` are checks, `paid` is a settlement.
+    expect(report.two.auditOutcomes).toContain('confirm_required');
+    expect(report.two.auditOutcomes).toContain('paid');
+    expect(text).toContain('mandate 22222222-2222-4222-8222-222222222222');
+    expect(text).toMatch(/paid {14}2045 GBP {2}order order_000001/);
+
+    expect(text).toContain(
+      'THE AUDIT LOG — every mandate check and every settlement, pass or fail',
+    );
+    // The pre-T07c heading, which named only one of the two kinds.
+    expect(text).not.toContain('THE AUDIT LOG — every mandate check, pass or fail');
+    expect(text).toContain('A check names the two parties; a settlement names the order it paid.');
+  });
+
+  it('the tally under the log is read off the log, not written down', async () => {
+    const { text } = await demo();
+
+    // Run 2's audit section is the last one printed. Its count line and the
+    // sentence under it have to agree, whatever is in the log: the sentence
+    // this replaced said "Two entries, not one" directly under "3 entries."
+    const counts = [...text.matchAll(/(\d+) entr(?:y|ies)\./g)];
+    const entries = counts.at(-1) ?? null;
+    const tally = /(\d+) mandate checks? and (\d+) settlements? above\./.exec(text);
+
+    expect(counts).toHaveLength(2); // one audit section per run
+    expect(entries).not.toBeNull();
+    expect(tally).not.toBeNull();
+    if (entries === null || tally === null) return;
+
+    const total = Number(entries[1]);
+    const checks = Number(tally[1]);
+    const settlements = Number(tally[2]);
+
+    expect(checks + settlements).toBe(total);
+    expect(total).toBe(3);
+    expect(checks).toBe(2);
+    expect(settlements).toBe(1);
+    expect(text).not.toContain('Two entries, not one');
+  });
+
+  it('prints the MCP revision the connection negotiated (D100)', async () => {
+    const { text } = await demo();
+
+    // The in-memory transport's answer, which is not the stdio one: that is
+    // the whole reason the demo prints it rather than stating it (D75).
+    expect(text).toContain('THE CONNECTION');
+    expect(text).toMatch(/MCP revision\s+2025-11-25 \(era legacy\)/);
+    expect(text).toContain('negotiates 2026-07-28');
+    expect(text).toContain('scripts/stdio-smoke.test.ts asserts');
   });
 
   it('prints the mandate once as JSON, with the signature withheld', async () => {

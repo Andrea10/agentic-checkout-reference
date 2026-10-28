@@ -2361,7 +2361,8 @@ bank (D55).
   audit log. The process path — a spawned `merchant/stdio.ts` reading its
   configuration from the environment — is covered by
   `scripts/stdio-smoke.test.ts` instead, which runs the same agent against the
-  same plan and asserts a paid order.
+  same plan and asserts both the revision that opening negotiates and a paid
+  order.
 - **Alternative.** Start `merchant/stdio.ts` as a child process, as
   `agent/client.ts` and `merchant/stdio.ts` both anticipated, and have the
   child print its own audit log to its stderr for the parent to relay.
@@ -2376,9 +2377,14 @@ bank (D55).
 - **Cost.** The demo does not exercise a process boundary, a pipe, or
   `serveStdio`'s era negotiation, so it proves less than the command looks
   like it proves — and it negotiates MCP **2025-11-25** rather than the
-  2026-07-28 a spawned merchant gives (D75), which the output says plainly.
-  The smoke test is what keeps the real path covered, and it is one test
-  rather than a second demo. The demo also sees state no MCP client could
+  2026-07-28 a spawned merchant gives (D75), which the output says plainly: a
+  `THE CONNECTION` section prints the revision read off
+  `MerchantConnection.protocolVersion`, with one sentence on why it is the
+  2025-era handshake here and what a spawned merchant answers instead. Read
+  off the connection rather than stated, because a stated revision is a
+  sentence that can go out of date without anything failing. The smoke test is
+  what keeps the real path covered, and it is one test rather than a second
+  demo. The demo also sees state no MCP client could
   reach: the policy, the ledger and the order store. That is honest for a
   process that *is* the merchant, but a reader has to notice which side of the
   seam each printed fact came from, so the sections say so.
@@ -2456,12 +2462,18 @@ bank (D55).
   check by eye, so withholding it costs the output nothing.
 - **Cost.** What is **not** deterministic, and what a reader should therefore
   not expect to be stable: the mandate's signature and the key pair behind it
-  (new on every run, never printed); the negotiated MCP revision and the
-  merchant's reported version, which are whatever the pinned SDK answers; and
-  wall-clock duration. The frozen clock also means the demo always prints
-  dates in October 2026, which will read as stale from 2027 onward — the
-  output says the clock is frozen, and the alternative is a demo whose text
-  changes every day and whose README mandate expires.
+  (new on every run, never printed); the merchant's reported version and
+  wall-clock duration, neither of which is printed. The one printed value that
+  is not the demo's own to control is the negotiated MCP revision (D100): it
+  is the same on every run against a pinned SDK, which is what keeps the two
+  runs byte-identical, but an SDK upgrade that changed the in-memory
+  transport's handshake would change that line and fail the test in
+  `scripts/demo.test.ts` that pins it. That is the intended behaviour — the
+  revision is a fact about the connection, and a demo that printed a stale one
+  would be worse than a test that says the fact moved. The frozen clock also
+  means the demo always prints dates in October 2026, which will read as stale
+  from 2027 onward — the output says the clock is frozen, and the alternative
+  is a demo whose text changes every day and whose README mandate expires.
 
 ## D104 · The rail's transcript is collected, not written to stderr — PROPOSED
 
