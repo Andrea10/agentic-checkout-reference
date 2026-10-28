@@ -28,3 +28,4 @@ T08 review round 1 fixed (merged T07a; order step now runs against the real plac
 T07b claimed 2026-10-28T16:01:43Z
 T07b PR #17 opened 2026-10-28T16:18:58Z
 T07b merged main (T08, chores); T08 collision fixed in test/agent/ only; 514 tests 2026-10-28T16:33:18Z
+T09 claimed 2026-10-28T20:27:49Z
