@@ -45,7 +45,9 @@ export const placeOrderInput = z.object({
     .describe('Quote id returned by get_quote. The cart is found through it.'),
   agent: z
     .string()
-    .describe('The agent placing the order. Must match the mandate’s agent.'),
+    .describe(
+      'The agent placing the order. Must match the agent the mandate names. Not authenticated: the merchant compares this with the mandate but cannot prove the caller is that agent (D61).',
+    ),
   mandate: mandateWireSchema.describe(
     'The signed spending mandate authorising this purchase.',
   ),
