@@ -72,6 +72,8 @@ import {
   CartStore,
   OrderStore,
   QuoteStore,
+  ISSUER_PUBLIC_KEY_ENV,
+  MERCHANT_ID_ENV,
   configFromEnvironment,
   createMerchantServer,
   createMerchantState,
@@ -263,9 +265,10 @@ function describeMandate(p: Printer, mandate: Mandate): void {
   p.item(
     `  without asking up to ${money(mandate.human_confirm_above_minor)}; above that a human must confirm`,
   );
-  p.item('Signed Ed25519 over the canonical claims. The merchant was started');
-  p.item(`with the issuer's public key in ${'ACR_MANDATE_PUBLIC_KEY'} and nothing else:`);
-  p.item('the private key never leaves the issuer and is never printed.');
+  p.item('Signed Ed25519 over the canonical claims. The merchant holds the');
+  p.item(`issuer's public key, read from ${ISSUER_PUBLIC_KEY_ENV}, and no other`);
+  p.item('key material: the private key never leaves the issuer, and nothing');
+  p.item('derived from it is printed here.');
 }
 
 /**
@@ -321,8 +324,8 @@ interface DemoMerchant {
  */
 function startMerchant(encodedPublicKey: string): DemoMerchant {
   const config = configFromEnvironment({
-    ACR_MERCHANT_ID: MERCHANT,
-    ACR_MANDATE_PUBLIC_KEY: encodedPublicKey,
+    [MERCHANT_ID_ENV]: MERCHANT,
+    [ISSUER_PUBLIC_KEY_ENV]: encodedPublicKey,
   });
   if (config.issuerPublicKey === undefined) {
     throw new Error('the demo merchant was started without a trusted issuer key');
