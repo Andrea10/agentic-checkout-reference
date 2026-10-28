@@ -24,9 +24,12 @@ import {
   createMemoryLedger,
   generateMandateKeyPair,
   issue,
+  type AuditEntry,
   type Mandate,
+  type MandateCheckEntry,
   type MandateClaims,
   type MandatePolicy,
+  type SettlementEntry,
 } from '../../../mandate/index.js';
 import { CartStore, sequentialCartIds } from '../../../merchant/cart.js';
 import { CATALOGUE, type Product } from '../../../merchant/catalogue.js';
@@ -280,6 +283,35 @@ export function reasonsOf(result: ToolCallResult): string[] {
   const error = refusalOf(result);
   expect(error.code).toBe('mandate_refused');
   return (error.reasons ?? []).map((entry) => entry.reason);
+}
+
+/**
+ * The audit log holds two kinds of entry since T07c — the mandate decisions
+ * and what the rail then did (D94) — so the three readers below save every
+ * suite from writing the same `kind` filter. `outcomesOf` is the one that
+ * matters most: it is the log as the demo prints it, both kinds, in order.
+ */
+export function entriesOf(merchant: Merchant): readonly AuditEntry[] {
+  return merchant.policy.audit.entries();
+}
+
+/** Every outcome word in the log, of both kinds, oldest first. */
+export function outcomesOf(merchant: Merchant): string[] {
+  return entriesOf(merchant).map((entry) => entry.outcome);
+}
+
+/** Just the mandate decisions, oldest first. */
+export function checksOf(merchant: Merchant): MandateCheckEntry[] {
+  return entriesOf(merchant).filter(
+    (entry): entry is MandateCheckEntry => entry.kind === 'mandate_check',
+  );
+}
+
+/** Just the settlements, oldest first. */
+export function settlementsOf(merchant: Merchant): SettlementEntry[] {
+  return entriesOf(merchant).filter(
+    (entry): entry is SettlementEntry => entry.kind === 'settlement',
+  );
 }
 
 /** Places a held order and returns its token and id. */

@@ -35,18 +35,22 @@ import {
   MUG,
   MUG_PRICE,
   NOW,
+  checksOf,
   claims,
   issuer,
   mandateFor,
   openMerchant,
   order,
+  outcomesOf,
   quoteFor,
   reasonsOf,
   refusalOf,
+  settlementsOf,
   successOf,
   type Merchant,
 } from './support/merchant-harness.js';
 import { bodyOf } from './support/raw-client.js';
+import { ScriptedRail } from './support/scripted-rail.js';
 
 describe('place_order: the approved path', () => {
   let merchant: Merchant;
@@ -120,7 +124,7 @@ describe('place_order: the approved path', () => {
       merchant: 'merchant-somewhere-else',
     });
 
-    const entry = merchant.policy.audit.entries()[0];
+    const entry = checksOf(merchant)[0];
     expect(entry?.amount_minor).toBe(MUG_PRICE);
     expect(entry?.currency).toBe('GBP');
     expect(entry?.merchant).toBe(MERCHANT);
@@ -156,7 +160,7 @@ describe('place_order: the approved path', () => {
     // The amount checked, the amount authorised and the amount recorded are
     // one number. Nothing in the type system ties them together (D51's cost),
     // so a test does.
-    expect(merchant.policy.audit.entries()[0]?.amount_minor).toBe(MUG_PRICE);
+    expect(checksOf(merchant)[0]?.amount_minor).toBe(MUG_PRICE);
     expect(merchant.railLog[1]?.amount_minor).toBe(MUG_PRICE);
     expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(MUG_PRICE);
   });
@@ -190,6 +194,88 @@ describe('place_order: the approved path', () => {
     expect(reasonsOf(refused)).toEqual(['budget_exceeded']);
     expect(refusalOf(refused).reasons?.[0]?.message).toContain('100');
     expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(2900);
+  });
+});
+
+describe('place_order: a rail that takes less than it held (D87)', () => {
+  /**
+   * The test the pre-review of T07b found missing.
+   *
+   * D87 says the ledger records the amount the rail *took*, not the amount the
+   * policy checked. On every other path in the repo those are one number by
+   * construction — the authorise request is built from the order and
+   * `StubRail` captures in full (D52) — so the rule is invisible and a ledger
+   * fed from the policy amount would pass every other test in this file. Here
+   * the rail holds 1450 and takes 1400, and the fifty pence is the whole
+   * point: it shows up in the ledger, in the budget the *next* order is
+   * checked against, and in the audit log's settlement line (D97).
+   */
+  const TAKEN = 1400;
+
+  it('records what the rail took, not what the policy checked', async () => {
+    const rail = new ScriptedRail({ captureAmount: TAKEN });
+    const merchant = await openMerchant({ rail });
+    try {
+      const { quote_id } = await quoteFor(merchant);
+
+      expect(
+        successOf(await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() })).status,
+      ).toBe('paid');
+
+      // The policy checked 1450 and the rail took 1400.
+      expect(checksOf(merchant)[0]?.amount_minor).toBe(MUG_PRICE);
+      expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(TAKEN);
+      expect(merchant.policy.ledger.spent(MANDATE_ID)).not.toBe(MUG_PRICE);
+    } finally {
+      await merchant.close();
+    }
+  });
+
+  it('checks the follow-up order against the amount taken, so the budget is the rail’s', async () => {
+    const rail = new ScriptedRail({ captureAmount: TAKEN });
+    const merchant = await openMerchant({ rail });
+    try {
+      const first = await quoteFor(merchant);
+      const second = await quoteFor(merchant);
+      // The cap is 2850, which is exactly 1400 + 1450: the second order is
+      // inside it if and only if the first order consumed what the rail took
+      // (1400), leaving 1450. Fed the policy amount instead, the first order
+      // would consume 1450, leave 1400, and this order would be refused
+      // `budget_exceeded` — the fifty pence is the whole test.
+      const mandate = mandateFor({
+        amount_cap_minor: 2850,
+        per_transaction_cap_minor: 2500,
+        human_confirm_above_minor: 5000,
+      });
+
+      await order(merchant, { quote_id: first.quote_id, agent: AGENT, mandate });
+      const body = successOf(
+        await order(merchant, { quote_id: second.quote_id, agent: AGENT, mandate }),
+      );
+
+      expect(body.status).toBe('paid');
+      expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(TAKEN * 2);
+      expect(outcomesOf(merchant)).toEqual(['allow', 'paid', 'allow', 'paid']);
+    } finally {
+      await merchant.close();
+    }
+  });
+
+  it('settles the audit log at the amount taken too', async () => {
+    const rail = new ScriptedRail({ captureAmount: TAKEN });
+    const merchant = await openMerchant({ rail });
+    try {
+      const { quote_id } = await quoteFor(merchant);
+      await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
+
+      // The check line says what was authorised, the settlement line says what
+      // moved, and an auditor reading the two together sees the difference
+      // rather than having to reconcile the ledger against the rail (D97).
+      expect(outcomesOf(merchant)).toEqual(['allow', 'paid']);
+      expect(settlementsOf(merchant)[0]?.amount_minor).toBe(TAKEN);
+    } finally {
+      await merchant.close();
+    }
   });
 });
 
@@ -251,8 +337,8 @@ describe('place_order: the awaiting path (PRD R4)', () => {
       mandate: mandateFor({ human_confirm_above_minor: 1000 }),
     });
 
-    expect(merchant.policy.audit.entries()[0]?.outcome).toBe('confirm_required');
-    expect(merchant.policy.audit.entries()[0]?.reasons).toEqual([]);
+    expect(checksOf(merchant)[0]?.outcome).toBe('confirm_required');
+    expect(checksOf(merchant)[0]?.reasons).toEqual([]);
   });
 
   it('does not pay a held order either', async () => {
@@ -612,7 +698,7 @@ describe('place_order: a merchant with no issuer configured (D60)', () => {
   });
 });
 
-describe('place_order: the audit log (D48, D65)', () => {
+describe('place_order: the audit log (D48, D65, D94)', () => {
   let merchant: Merchant;
 
   beforeEach(async () => {
@@ -640,13 +726,49 @@ describe('place_order: the audit log (D48, D65)', () => {
       mandate: mandateFor({ human_confirm_above_minor: 1000 }),
     });
 
-    expect(merchant.policy.audit.size).toBe(3);
-    expect(merchant.policy.audit.entries().map((entry) => entry.outcome)).toEqual([
+    // Three checks, and one settlement: only the first order reached the rail,
+    // the second was refused and the third is waiting for a human (D94).
+    expect(checksOf(merchant)).toHaveLength(3);
+    expect(checksOf(merchant).map((entry) => entry.outcome)).toEqual([
       'allow',
       'refuse',
       'confirm_required',
     ]);
-    expect(merchant.policy.audit.entries()[1]?.reasons).toEqual(['agent_mismatch']);
+    expect(checksOf(merchant)[1]?.reasons).toEqual(['agent_mismatch']);
+    expect(outcomesOf(merchant)).toEqual(['allow', 'paid', 'refuse', 'confirm_required']);
+  });
+
+  it('writes the settlement under the decision that allowed it, in that order (D94, D98)', async () => {
+    const { quote_id } = await quoteFor(merchant);
+
+    await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
+    const [check, settlement] = merchant.policy.audit.entries();
+
+    // This is the pair an auditor reads: why the purchase was allowed, and
+    // what then happened to the money. Before T07c the second line did not
+    // exist (D86).
+    expect(check?.kind).toBe('mandate_check');
+    expect(check?.outcome).toBe('allow');
+    expect(settlement?.kind).toBe('settlement');
+    expect(settlement).toMatchObject({
+      outcome: 'paid',
+      order_id: 'order_000001',
+      mandate_id: MANDATE_ID,
+      amount_minor: MUG_PRICE,
+      currency: 'GBP',
+      at: NOW,
+    });
+  });
+
+  it('leaves no settlement entry for an order the mandate refused', async () => {
+    const { quote_id } = await quoteFor(merchant);
+
+    await order(merchant, { quote_id, agent: 'agent-impostor', mandate: mandateFor() });
+
+    // The refusal never reached the rail, so there is nothing to settle: the
+    // log reads as one refused decision and no payment (D99).
+    expect(outcomesOf(merchant)).toEqual(['refuse']);
+    expect(settlementsOf(merchant)).toEqual([]);
   });
 
   it('records what was asked for, so a refusal is legible afterwards', async () => {
@@ -657,7 +779,7 @@ describe('place_order: the audit log (D48, D65)', () => {
       agent: 'agent-impostor',
       mandate: mandateFor(),
     });
-    const entry = merchant.policy.audit.entries()[0];
+    const entry = checksOf(merchant)[0];
 
     expect(entry?.at).toBe(NOW);
     expect(entry?.mandate_id).toBe(MANDATE_ID);
@@ -682,7 +804,7 @@ describe('place_order: the audit log (D48, D65)', () => {
 
     // The demo prints it from the state it built; an agent cannot read it,
     // because a readable log of refusals is a probing oracle (D42).
-    expect(merchant.state.policy?.audit.size).toBe(1);
+    expect(merchant.state.policy?.audit.size).toBe(2);
 
     const response = await merchant.client.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];

@@ -11,7 +11,8 @@
  *    decline marks the order `declined` and is reported as
  *    `payment_declined`. A *throw* is the rail itself failing, which says
  *    nothing about the money: the order is left where it was and nothing is
- *    recorded (D85).
+ *    recorded as paid or spent (D85). The audit log does get a line saying
+ *    which call went unanswered, which is not a claim about the money.
  * 2. **`capture`.** A decline here is a different event from a decline above —
  *    the funds are held and could not be taken — so the order stays
  *    `authorised` and the code is `capture_failed` (D81).
@@ -19,6 +20,14 @@
  *    for the amount the rail actually took (D45, D87). This is the step that
  *    consumes mandate budget, so a payment that failed leaves the budget
  *    exactly as it was.
+ *
+ * Every one of those four outcomes — paid, declined, capture refused, rail
+ * unavailable — is also appended to the audit log, beside the mandate decision
+ * it followed (D94, D98). This is the only place that writes them, which is
+ * why both `place_order` and `confirm_order` produce them without either tool
+ * knowing anything about it: there is one copy of the sequence, so there is
+ * one copy of the record of it. A call refused *before* the rail settles
+ * nothing and therefore logs nothing (D99).
  *
  * The order id is the rail's `order_ref`. It is a reference the rail echoes
  * and logs, not an idempotency key (D56), so nothing here may retry a call
@@ -33,12 +42,14 @@ import {
   RailUnavailableError,
 } from './errors.js';
 
-import type { MandatePolicy } from '../mandate/index.js';
+import type { MandatePolicy, SettlementRecord } from '../mandate/index.js';
 import type {
   AuthoriseResult,
   Capture,
   CaptureResult,
   Rail,
+  RailCall,
+  RailDecline,
 } from '../rail/index.js';
 import type { OrderStore, PayableOrder } from './order.js';
 
@@ -56,12 +67,15 @@ export interface PaymentContext {
 }
 
 /**
- * Authorises, captures, records the spend, and returns the paid body.
+ * Authorises, captures, records the spend and the settlement, and returns the
+ * paid body.
  *
  * @throws PaymentDeclinedError if the rail would not hold the funds.
  * @throws CaptureFailedError if the funds were held and could not be taken.
  * @throws RailUnavailableError if the rail threw, in which case the payment
- * state is unknown and nothing has been recorded.
+ * state is unknown and nothing has been recorded as paid. The audit log still
+ * gets a line: "we asked and got no answer" is what an auditor needs to see
+ * (D98).
  */
 export async function settle(
   context: PaymentContext,
@@ -79,12 +93,15 @@ export async function settle(
   } catch (thrown) {
     // The rail may or may not have taken the money. The order keeps the state
     // it had and the ledger is untouched: recording either outcome would be a
-    // guess (D50, D85).
+    // guess (D50, D85). The audit line says exactly that much — which call
+    // went unanswered — and no more.
+    logSettlement(context, order, { outcome: 'rail_unavailable', rail_call: 'authorise' });
     throw new RailUnavailableError('authorise', thrown);
   }
 
   if (!authorised.ok) {
     orders.markDeclined(order.order_id, authorised.decline);
+    logSettlement(context, order, { outcome: 'payment_declined', decline: authorised.decline });
     throw new PaymentDeclinedError(authorised.decline);
   }
 
@@ -98,18 +115,84 @@ export async function settle(
   } catch (thrown) {
     // The order stays `authorised`, which is true whatever happened: the rail
     // granted the hold, and whether it then took the funds is unknown.
+    logSettlement(context, order, { outcome: 'rail_unavailable', rail_call: 'capture' });
     throw new RailUnavailableError('capture', thrown);
   }
 
   if (!captured.ok) {
     orders.markCaptureDeclined(order.order_id, captured.decline);
+    logSettlement(context, order, { outcome: 'capture_failed', decline: captured.decline });
     throw new CaptureFailedError(captured.decline);
   }
 
   const paid = orders.markPaid(order.order_id, captured.capture);
+  // The log before the ledger, and both after the order's own record. The
+  // money has moved, so the auditor's line is written from the thing that
+  // reports it moving and is written first: a throw out of `recordSpend` then
+  // leaves a log that still says the money left (D98).
+  logSettlement(context, order, {
+    outcome: 'paid',
+    amount_minor: captured.capture.amount_minor,
+  });
   recordSpend(policy, spendFor(paid.mandate_id, captured.capture));
 
   return { status: 'paid', order_id: paid.order_id };
+}
+
+/** What varies between the four settlement lines; everything else is the order. */
+type SettlementDetail =
+  | { readonly outcome: 'paid'; readonly amount_minor: number }
+  | {
+      readonly outcome: 'payment_declined' | 'capture_failed';
+      readonly decline: RailDecline;
+    }
+  | { readonly outcome: 'rail_unavailable'; readonly rail_call: RailCall };
+
+/**
+ * Appends one settlement line to the audit log the policy writes its decisions
+ * to, so the payment reads directly under the check that allowed it (D94).
+ *
+ * The time comes from the policy's clock and not from the rail's: the rail's
+ * stub clock starts at its own synthetic epoch, and a log whose lines are
+ * stamped by two clocks cannot be read in order (D97). The rail's own
+ * `authorised_at` and `captured_at` stay where they are, on the order.
+ *
+ * The amount is the one the rail took when there is one, and the amount
+ * attempted otherwise — the same reasoning as D87's ledger, one log along.
+ * The decline's `message` is deliberately left behind: the code and the origin
+ * are what an auditor reads, and prose belongs on the error body (D96).
+ */
+function logSettlement(
+  context: PaymentContext,
+  order: PayableOrder,
+  detail: SettlementDetail,
+): void {
+  const { policy } = context;
+  const common = {
+    at: policy.clock(),
+    mandate_id: order.mandate_id,
+    order_id: order.order_id,
+    currency: order.currency,
+  } as const;
+
+  const record: SettlementRecord =
+    detail.outcome === 'paid'
+      ? { ...common, outcome: 'paid', amount_minor: detail.amount_minor }
+      : detail.outcome === 'rail_unavailable'
+        ? {
+            ...common,
+            outcome: 'rail_unavailable',
+            amount_minor: order.amount_minor,
+            rail_call: detail.rail_call,
+          }
+        : {
+            ...common,
+            outcome: detail.outcome,
+            amount_minor: order.amount_minor,
+            decline: { code: detail.decline.code, origin: detail.decline.origin },
+          };
+
+  policy.audit.recordSettlement(record);
 }
 
 /**
