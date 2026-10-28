@@ -27,3 +27,4 @@ T07a PR #16 opened 2026-10-28T12:04:30Z
 T08 review round 1 fixed (merged T07a; order step now runs against the real place_order; 5 collisions fixed) 2026-10-28T13:14:34Z
 T07b claimed 2026-10-28T16:01:43Z
 T07b PR #17 opened 2026-10-28T16:18:58Z
+T07b merged main (T08, chores); T08 collision fixed in test/agent/ only; 514 tests 2026-10-28T16:33:18Z
