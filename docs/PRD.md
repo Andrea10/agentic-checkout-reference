@@ -1,6 +1,6 @@
 # PRD: agentic-checkout-reference
 
-*v0.2, 27 Oct 2026. Author: Andrea Caputo.*
+*v0.3, 28 Oct 2026. Author: Andrea Caputo.*
 
 ## 0. In plain words
 
@@ -40,7 +40,7 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 **Mandate**
 
 - R1. A mandate is a signed object: principal, agent, merchant, currency, total cap, per-transaction cap, validity window, human-confirm threshold. It is signed with Ed25519 over canonical JSON, and every field present is signed (ruled 27 Oct, P1 to P5; recorded in `docs/DECISIONS.md` by T06b).
-- R2. The merchant checks, in order: signature, agent, merchant, window, per-transaction cap, remaining budget, currency, human-confirm threshold. Each failure returns a structured refusal.
+- R2. The merchant checks, in order: signature, agent, merchant, window, currency, per-transaction cap, remaining budget, human-confirm threshold. Currency comes before the caps because a cap in one currency says nothing about an amount in another (D43, ruled 27 Oct). Each failure returns a structured refusal.
 - R3. Amounts are integers of minor units. Anything else is refused.
 - R4. Above the human-confirm threshold the order is held (`awaiting_confirmation`) until a human confirms with a token.
 - R5. Every check, pass or fail, is appended to an audit log. Entries are never edited.
