@@ -1,10 +1,11 @@
 /**
  * The whole plan, against the whole merchant.
  *
- * Nothing is stubbed here any more. T07a shipped `place_order`, so all six
- * tools in this suite are the merchant's own: the real catalogue, the real
- * cart store, the real ACP-shaped quote, the real mandate policy and the real
- * order store, reached through the v2 client.
+ * Nothing is stubbed here any more. T07a shipped `place_order` and T07b the
+ * payment behind it, so every tool this suite calls is the merchant's own:
+ * the real catalogue, the real cart store, the real ACP-shaped quote, the
+ * real mandate policy, the real order store and the real stub rail, reached
+ * through the v2 client.
  *
  * The merchant runs with sequential ids and a clock frozen inside the test
  * mandate's window (`harness.ts`), so the assertions name `cart_000001` and
@@ -66,12 +67,17 @@ describe('the full plan: list, pick two, cart, add both, quote, place_order', ()
       'get_quote',
       'place_order',
     ]);
+    // `ordered` is the agent's word for "the merchant completed it"; `paid`
+    // is the merchant's word for what it did. Since T07b the direct path pays
+    // inside the one call (D88), so the body says `paid` where it used to say
+    // `approved` — and the agent carries it through unread, which is the
+    // property D90 kept `approvedSchema` loose for.
     expect(result.outcome).toEqual({
       kind: 'ordered',
       order: {
         order_id: 'order_000001',
-        status: 'approved',
-        body: { order_id: 'order_000001', status: 'approved' },
+        status: 'paid',
+        body: { order_id: 'order_000001', status: 'paid' },
       },
     });
   });
@@ -114,7 +120,7 @@ describe('the full plan: list, pick two, cart, add both, quote, place_order', ()
     expect(quote === undefined ? undefined : totalOf(quote)).toBe(TWO_ITEM_SUBTOTAL);
   });
 
-  it('sees all six tools the merchant advertises', async () => {
+  it('sees all seven tools the merchant advertises', async () => {
     const caller = await merchant();
 
     expect(await caller.listToolNames()).toEqual(MERCHANT_TOOL_NAMES);
