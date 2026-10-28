@@ -1089,7 +1089,7 @@ opened and read on 28 Oct 2026, with the facts they settled:
 
 ## T07a · Merchant place_order with mandate
 
-D60 to D69 are T07a's. All are **PROPOSED**: Andrea has not ruled on them.
+D60 to D69 are T07a's. All were accepted by Andrea on 28 Oct (D64 and D65 as recommended: see each entry).
 
 The contract `place_order` is built to — input `{ quote_id, agent, mandate }`,
 the merchant's own id as configuration, the amount and currency read from the
@@ -1098,7 +1098,7 @@ human-confirm threshold, and a structured error carrying every policy reason —
 was fixed in the task brief, because T08's buyer agent is being written against
 it in parallel. The decisions below are the choices that brief left open.
 
-## D60 · The merchant's own id and its trusted issuer are configuration, read from the environment — PROPOSED
+## D60 · The merchant's own id and its trusted issuer are configuration, read from the environment — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `merchant/config.ts` reads two variables: `ACR_MERCHANT_ID`
   (default `merchant-demo`) and `ACR_MANDATE_PUBLIC_KEY`, the issuer's Ed25519
@@ -1134,7 +1134,7 @@ it in parallel. The decisions below are the choices that brief left open.
   And `createMerchantState`'s signature changed, so anything written against
   the positional form (one test) had to move.
 
-## D61 · The agent id is a caller-supplied argument, and is not authenticated — PROPOSED
+## D61 · The agent id is a caller-supplied argument, and is not authenticated — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `place_order` takes `agent` as a string argument and passes it
   to `checkMandate()` as the agent making the purchase. The merchant does
@@ -1161,7 +1161,7 @@ it in parallel. The decisions below are the choices that brief left open.
   names the gap, rather than left for a reader to notice; T10 should carry it
   into `docs/ARCHITECTURE.md` as a stated limitation of Stage 1.
 
-## D62 · The approved status word is `approved`, and the success body is two fields — PROPOSED
+## D62 · The approved status word is `approved`, and the success body is two fields — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** An order the mandate covers comes back as
   `{ status: 'approved', order_id }`, and one above the threshold as
@@ -1193,7 +1193,7 @@ it in parallel. The decisions below are the choices that brief left open.
   required on the awaiting path has to read `status` first, because the
   advertised schema only says the field is optional.
 
-## D63 · Orders are held server-side, and the confirmation token is not the order id — PROPOSED
+## D63 · Orders are held server-side, and the confirmation token is not the order id — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** An `OrderStore` holds orders in the server process, mirroring
   `CartStore` and `QuoteStore`: random `order_<uuid>` ids by default,
@@ -1219,7 +1219,7 @@ it in parallel. The decisions below are the choices that brief left open.
   held order waits for a human forever — and there is no way to cancel one;
   T07b or T12 should give it a lifetime.
 
-## D64 · A quote is single use; the cart is left alone — PROPOSED
+## D64 · A quote is single use; the cart is left alone — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The order store indexes orders by `quote_id`, and
   `place_order` refuses a second order against a quote that already has one —
@@ -1251,7 +1251,7 @@ it in parallel. The decisions below are the choices that brief left open.
   leaves the quote free, which is right for a mistyped mandate and is also a
   small retry oracle.
 
-## D65 · The mandate check is the last gate, so refusals before it leave no audit entry — PROPOSED
+## D65 · The mandate check is the last gate, so refusals before it leave no audit entry — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `place_order` runs its checks in this order: the merchant is
   configured, the quote is current (D38), the quote is unused (D64), the stock
@@ -1280,7 +1280,7 @@ it in parallel. The decisions below are the choices that brief left open.
   the fix is D48's widening, an entry kind on `AuditEntry`, and it should be
   T07b's or T10's, not a second log here.
 
-## D66 · The refusal envelope carries the policy reasons, in a list, under the existing shape — PROPOSED
+## D66 · The refusal envelope carries the policy reasons, in a list, under the existing shape — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `MandateRefusedError extends MerchantError` with code
   `mandate_refused`, and `toErrorBody()` adds a `reasons` array to D13's body:
@@ -1310,7 +1310,7 @@ it in parallel. The decisions below are the choices that brief left open.
   caller in those messages, which D42's cost already accepted for a correctly
   signed mandate.
 
-## D67 · The mandate's wire schema describes shape, not validity — PROPOSED
+## D67 · The mandate's wire schema describes shape, not validity — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** `merchant/mandate-wire.ts` describes the mandate argument with
   zod as strings and plain `number`s: no `int()`, no datetime format, no
@@ -1338,7 +1338,7 @@ it in parallel. The decisions below are the choices that brief left open.
   `additionalProperties` is open on the mandate object, so a client generator
   will produce a permissive type.
 
-## D68 · `amount_invalid` is unreachable through `place_order`, and is left unreached — PROPOSED
+## D68 · `amount_invalid` is unreachable through `place_order`, and is left unreached — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** No test fakes an invalid amount through the server. A comment
   in `test/merchant/place-order.test.ts` states why the reason cannot be
@@ -1364,7 +1364,7 @@ it in parallel. The decisions below are the choices that brief left open.
   something other than a cart, the invariant goes and nothing in `place_order`
   would catch it — only the invariant test, which is why it exists.
 
-## D69 · The audit log is reachable from the server state, and from no tool — PROPOSED
+## D69 · The audit log is reachable from the server state, and from no tool — ACCEPTED (Andrea, 28 Oct)
 
 - **Decision.** The policy lives on `MerchantState`, so `state.policy?.audit`
   is reachable by anything holding the state — T09's demo prints it with
@@ -1388,11 +1388,425 @@ it in parallel. The decisions below are the choices that brief left open.
   log is reached through an optional field, so a caller writes `policy?.audit`
   and has to consider the unconfigured merchant (D60).
 
+D70 to D79 are T08's, the buyer agent. All were accepted by Andrea on 28 Oct.
+
+## D70 · The planner decides, the runner calls, and neither can do the other's job — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** `agent/` has two halves with one interface between them.
+  `Planner.next(memory): PlanStep` is synchronous, pure, and returns a
+  *description* of a tool call. `runPlan()` in `agent/run.ts` owns the loop,
+  makes every call, and folds each answer back into the memory. A `Planner` is
+  handed no connection, no client and no credentials, so it cannot call a tool
+  even by accident; the runner is handed no shopping logic, so it cannot
+  decide what to buy.
+- **Alternative.** One object with the connection on it, deciding and calling
+  in the same method — the shape most agent examples use, and the shape
+  `runPlan` would collapse into if `next()` were allowed to be `async`.
+- **Why.** The interesting questions about an agentic checkout are decisions:
+  which product, how many, when to re-price, when to stop, and whether to
+  confirm its own order. With this seam those questions are answered by
+  calling a pure function with a literal — `test/agent/planner.test.ts` has
+  twenty-one such tests and starts no server, opens no transport and holds no
+  mandate. The reverse also holds: `test/agent/flow.test.ts` drives the runner
+  with a three-line planner to check the plumbing with no shopping logic in
+  the way. A reader who wants to see how the agent thinks reads one file,
+  `agent/scripted.ts`, which contains no `await` at all.
+- **Cost.** Two files and an interface where one class would do, and a step
+  type that has to be kept in step with the merchant's tool list by hand: add
+  a tool and both `PlanStep` and the runner's `switch` change. The memory also
+  has to carry everything a planner might want, so a planner that wanted to
+  see, say, the audit log would need `PlanMemory` widened rather than just
+  reaching for it.
+
+## D71 · A plan is a state machine over what came back, not a list of steps to replay — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** `next()` takes the accumulated {@link PlanMemory} — products,
+  cart, quote — not a step index. `ScriptedPlanner` answers the first question
+  still open, so the order of the steps is fixed but each step is recomputed
+  from what the merchant actually said.
+- **Alternative.** A literal script: an array of six steps, replayed in order,
+  with the runner walking the index.
+- **Why.** Two things in this design make a tape wrong. A quote is good only
+  for the cart version it priced (D38), so a cart that moved under the agent
+  needs a fresh `get_quote` rather than an order against a stale price — the
+  merchant would refuse that order (`quote_stale`), and noticing first is the
+  difference between an agent that recovers and one that reports a failure.
+  And `add_to_cart` merges lines (D11), so what is in the cart after two adds
+  is not always what the agent asked for; comparing against the returned cart
+  catches a partly filled line, which counting its own adds would not.
+- **Cost.** The planner carries state logic, so its tests have to construct
+  memories rather than assert on a list, and a planner bug can loop. D73's
+  step budget is the answer to the second half of that.
+
+## D72 · The agent id and the mandate travel together, injected, and one step reads them — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** `AgentIdentity { agent, mandate }` is handed to `runPlan()` by
+  whoever starts the agent. Nothing in `agent/` reads either from the
+  environment, from a file, or from a module-level variable, and the only code
+  that touches them is `agent/order.ts`. The agent id goes on the wire as its
+  own `place_order` argument as well as being inside the mandate's `agent`
+  claim.
+- **Alternative.** A module-level configured agent, or a `BuyerAgent` class
+  holding the mandate as a field available to every method.
+- **Why.** Three reasons, in order of weight. A mandate is a credential, and
+  code that can reach a credential from anywhere can leak it from anywhere;
+  here it is in scope in one file. The demo (T09) has to run the same agent
+  twice under two different mandates to show the human-confirm path, which is
+  a parameter, not a reconfiguration. And the duplication of the agent id is
+  deliberate: the mandate says who the authority was *granted to*, the
+  argument says who is *using it*, and the merchant's policy check compares
+  them — that comparison (`agent_mismatch`) is the check that stops one agent
+  presenting another's mandate, so an agent that filled the argument in from
+  the mandate it is holding would be answering the question for the verifier.
+  `test/agent/order.test.ts` asserts the two can differ.
+- **Cost.** Every caller has to build an identity, including the tests, and
+  there is no ambient default to fall back on. A caller that passes a mandate
+  for a different agent gets a refusal from the merchant rather than a local
+  error — which is correct, but it is a round trip to find out.
+
+## D73 · A refusal is a returned value; a broken connection still throws — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** A tool answering `isError: true` becomes a `MerchantRefusal`
+  on the outcome: `callTool` returns `{ ok: false, refusal }`, and `runPlan`
+  stops at the first refusal and returns `{ kind: 'refused', step, refusal }`
+  naming the step that earned it. A broken connection, a tool the server does
+  not have, and a body the agent cannot parse all still throw.
+  `RunOptions.maxSteps` (default 24) bounds the loop and reports an overrun as
+  a `stopped` outcome with its reason.
+- **Alternative.** Throwing a typed `MerchantRefusalError`, which is what a
+  `try`/`catch` reader expects of a failed call.
+- **Why.** A refusal is not a failure. The connection worked, the request was
+  understood, and the mandate layer did the job this repository exists to
+  show — so it belongs in the return type, where the compiler makes the caller
+  handle it, rather than in an exception a caller can forget. The split is the
+  useful part: `refused` means the merchant decided something about this
+  purchase, and a throw means nobody decided anything. The step budget is
+  there because a planner is ordinary code that can have a bug, and an agent
+  with a mandate and an unbounded loop is an agent that spends until the cap
+  stops it.
+- **Cost.** Callers switch on `outcome.kind` rather than wrapping in `try`.
+  The two categories are also not perfectly clean: the SDK answers an
+  input-schema violation with `isError: true`, so an agent bug arrives as a
+  refusal rather than a throw. D78 names it `tool_error` so it at least does
+  not masquerade as a merchant refusal code.
+
+## D74 · On `awaiting_confirmation` the agent stops and hands back the token — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** When `place_order` answers
+  `{ status: 'awaiting_confirmation', confirmation_token, order_id }`, the run
+  ends with `{ kind: 'awaiting_confirmation', held }`. The agent does not call
+  `confirm_order`, does not retry under a different quote, and does not
+  re-quote a smaller cart to get under the threshold. The token is returned to
+  whoever started the agent, and the decision is theirs.
+- **Alternative.** Hold the token and expose `confirm()` on the agent, or take
+  a callback the host supplies for the human's answer.
+- **Why.** `human_confirm_above_minor` exists so that a person says yes above
+  a figure the person chose. An agent that confirms its own order has removed
+  the control it was built to respect, and an agent that *can* confirm is one
+  mis-wired host away from doing so — so the capability is absent rather than
+  guarded. Retrying smaller would be worse: it is the agent deciding that the
+  user's threshold was really a suggestion.
+- **Cost.** The caller has to carry the token to `confirm_order` itself, and
+  the agent cannot complete a purchase in one call when the amount is above
+  the threshold — which is the behaviour, not a limitation. T09 holds the
+  token between the two halves of the demo.
+
+## D75 · The client negotiates the newest revision both ends know: 2026-07-28, verified — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** The agent constructs its client with
+  `versionNegotiation: { mode: 'auto' }`, which probes with `server/discover`
+  before the handshake and falls back to the 2025-era `initialize` when the
+  server does not answer it. Nothing is pinned. The connection records what it
+  got — `MerchantConnection.protocolVersion` and `.protocolEra` — so a caller
+  reads the answer rather than assuming it.
+- **Alternative.** The SDK's default, `mode: 'legacy'`, which runs the 2025
+  handshake and never probes; or `{ pin: '2026-07-28' }`, which demands the
+  modern era and fails the connection without it.
+- **Why.** The repository claims to implement MCP revision 2026-07-28 (D09),
+  and until this task nothing had checked it: T06a could not add the client
+  package, so its tests drove the server with hand-written JSON-RPC and pinned
+  `2025-11-25`, and TASKS.md recorded the 2026-07-28 opening exchange as
+  UNVERIFIED. **It is now verified.** On
+  `@modelcontextprotocol/client` 2.4.0 against
+  `@modelcontextprotocol/server` 2.4.0, `test/agent/protocol.test.ts` spawns
+  the real `merchant/stdio.ts` over a pipe and the two ends settle on
+  **`2026-07-28`**, era `modern`, with `server/discover` reporting
+  `supportedVersions: ['2026-07-28']`. `auto` rather than a pin because a
+  reference client that refuses to talk to a 2025 server teaches the wrong
+  lesson about a protocol in transition, and the fallback is free.
+- **Cost.** One extra round trip on connect, and for the SDK's stdio transport
+  the probe runs in a disposable sibling process — so connecting spawns the
+  server command twice. There is a second, sharper cost worth writing down:
+  **the revision depends on how the server is mounted, not only on the SDK
+  version.** `serveStdio` owns the era decision for its connection and serves
+  the modern opening; an `McpServer` connected straight to a transport, which
+  is what the in-memory tests do, has no such entry point and serves
+  `2025-11-25` / `legacy`. Both are asserted (`protocol.test.ts` and
+  `client.test.ts`) so the difference is recorded rather than discovered. A
+  reader should not conclude from "SDK v2" that a connection is 2026-07-28.
+
+## D76 · `place_order` is one isolated function over the tool-calling seam — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** `agent/order.ts` holds `placeOrder(caller, identity, quoteId)`
+  and nothing else. Its only dependency is a `ToolCaller`, so it runs against
+  anything that can call a tool. It is tested against a stub MCP server in
+  `test/agent/stub-server.ts` that registers `place_order` with the agreed
+  contract.
+- **Alternative.** Fold the call into the runner's `switch` with the other
+  five tools, and wait for T07a before testing any of it.
+- **Why.** The immediate reason is scheduling: `place_order` is T07a's tool
+  and was not on main when this was written, so isolating it means the real
+  end-to-end check T09 owns is a change of argument and not a change of code.
+  `test/agent/flow.test.ts` already runs the whole plan against the **real**
+  merchant for all five shipped tools and routes only `place_order` to the
+  stub, so the seam is load-bearing today rather than scaffolding. The reason
+  that outlasts T07a: every other step reads a catalogue or moves a cart, and
+  this one presents a signed mandate and may cause a charge. Code that can
+  spend should be short enough to read in one sitting and reachable from one
+  place.
+- **Cost.** `place_order` is the one tool whose argument shape lives in two
+  places — the step and the runner's terminal branch. The order and held-order
+  bodies are also read loosely: `order_id` and `status` are required and the
+  rest of the body travels unread, because the shipped shape is T07a's to fix.
+  See the UNVERIFIED note on the refusal field name in the PR.
+
+## D77 · The agent validates only the fields it reads, and type-checks the rest against the merchant — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** `agent/wire.ts` declares its own zod schemas for the bodies
+  the agent reads, listing only the fields it uses and ignoring everything
+  else rather than rejecting it. It then imports the merchant's own types and
+  asserts, at compile time only, that each one is assignable to the agent's
+  shape (`MerchantShapesAreReadable`).
+- **Alternative.** Import the merchant's zod schemas and validate against them
+  whole — one definition, no duplication — or validate nothing and cast.
+- **Why.** A buyer agent in the world does not ship with the merchant's
+  source. It reads the fields it needs and tolerates whatever else arrives;
+  validating the merchant's whole object would make this agent break on a
+  merchant that *added* a field, which is exactly the coupling an
+  agentic-commerce protocol exists to remove. So the runtime check is the
+  agent's own and deliberately narrow. The compile-time assertion buys back
+  the thing duplication usually costs: if the merchant renames or retypes a
+  field the agent reads, `npm run build` fails in `agent/wire.ts` with the
+  field named, rather than a demo failing in front of a reader. Casting was
+  never on the table — the agent would then trust a body it never checked.
+- **Cost.** Two descriptions of the same wire shapes, which can drift in the
+  one direction the compiler cannot see: a field the merchant *adds* and the
+  agent should start reading will not announce itself. The assertion is also a
+  conditional type, which is a small piece of cleverness in a file otherwise
+  written to be read.
+
+## D78 · One `ToolCaller` seam, and a refusal that is not the envelope becomes `tool_error` — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** Everything above `agent/client.ts` reaches the merchant
+  through one method, `callTool(name, args)`, returning a body or a refusal.
+  A refusal body that does not parse as `{ error: { code, message } }` — the
+  SDK's own input-schema rejection is a plain sentence — becomes the code
+  `tool_error` with that text as its message.
+- **Alternative.** A method per tool on the connection, typed to each tool's
+  arguments; and for the unparseable body, throwing, since it is not a
+  merchant refusal.
+- **Why.** The narrow seam is what makes the runner testable against a stub, a
+  router (`routeTools` puts two servers behind one caller) or a plain object,
+  and it means a plan step cannot reconnect, change the protocol revision or
+  reach another client's state — it can only call tools. Typing is not lost:
+  it moved to `agent/wire.ts`, where the body is parsed once per tool.
+  `tool_error` rather than a throw because the agent should report one shape of
+  "no" to its caller, and the SDK has already decided to deliver this one as
+  `isError: true`; a distinct code keeps it from masquerading as something the
+  merchant's `MerchantErrorCode` list contains.
+- **Cost.** `callTool` takes `Record<string, unknown>`, so a typo in an
+  argument name is caught by the merchant's input schema at runtime rather
+  than by the compiler. And `tool_error` lumps together an agent bug and
+  anything else that arrives off-envelope, so a caller reading only the code
+  cannot tell them apart — the message is the only distinguisher.
+
+## D79 · Everything in `agent/` is deterministic: no randomness, no clock reads — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** No file under `agent/` calls `Math.random`, `Date.now`,
+  `new Date()` or `randomUUID`. Planners are pure functions of their memory.
+  Which products get bought is a `ProductChoice`, a pure function of the
+  listed catalogue; the default, `twoCheapest`, takes the two lowest-priced
+  products and breaks ties on product id. The only time the agent has the
+  current time, it is the merchant's `expires_at`, read off the quote.
+- **Alternative.** Inject a clock, as `mandate/` (D49) and `merchant/` do, and
+  use it to check the quote's expiry before ordering.
+- **Why.** An injected clock is right for a *verifier*, which has to decide
+  whether a window has closed. The agent is not the verifier: the merchant
+  re-checks the quote's expiry at order time and refuses `quote_expired`, so a
+  clock here would duplicate the check in the one place whose answer does not
+  count. Leaving it out buys an agent that produces byte-identical runs, which
+  is what lets `flow.test.ts` assert a cart total of 2045 pence rather than a
+  shape, and what will let T09's demo print the same transcript every time.
+  Ties are broken on product id because a sort that is not total is not
+  deterministic — two products at the same price must never swap places
+  between runs.
+- **Cost.** The agent will cheerfully present an expired quote and take a
+  refusal for it, where a clock would have let it re-quote first. That is a
+  round trip, and T09 or T12 may want it; the fix is a `ProductChoice`-shaped
+  injection of a clock into the planner, not a `Date.now()` in the runner.
+
+---
+
+D90 to D93 are T08's second round, written after T07a's `place_order` merged
+into main while T08 was in review. Each one amends an entry in T08's own
+D70 to D79 range, which was already full; Andrea gave this round its own
+numbers (28 Oct) rather than have the changes sit as unnumbered prose.
+**D70 to D79 are unchanged** — read each entry below as amending the one it
+names, and T10 may fold each into its target when it consolidates.
+
+## D90 · Amends D76: the stub no longer stands in for `place_order`, and is kept for two bodies only — ACCEPTED (Andrea, 28 Oct, as corrected)
+
+D76 was written when `place_order` was not on main, and its reasoning leaned
+on that: the agent's order step ran against a stub, and `flow.test.ts` drove
+"the real merchant for all five shipped tools" with the sixth routed
+elsewhere. Both halves of that are now out of date.
+
+- `flow.test.ts` drives **all six** of the merchant's tools, stub-free. The
+  plan runs end to end against the real policy check and the real order store.
+- `order.test.ts` drives the order step against the **real** tool for all
+  three of its answers, and pins the shipped combination: `approved` with an
+  `order_id` and no token; `awaiting_confirmation` with both; `mandate_refused`
+  with `error.reasons` naming every failed check. It also covers
+  `quote_already_ordered` (D64) and `merchant_misconfigured` (D60).
+- The seam D76 argued for held up in one respect: the order step is still one
+  function over a `ToolCaller`, and it now runs against the real tool.
+  Correction, 28 Oct, by the build lead before acceptance, from the
+  pre-reviewer's diff of `fa2cc24` to `667178a`: this entry first said the move
+  changed only the tests' arguments and not `agent/order.ts`. That was wrong.
+  Round 2 changed `agent/order.ts` (+29/-26, including the removal of
+  `unwrap()`, which had guessed at an envelope the shipped tool does not use),
+  `agent/refusal.ts`, `agent/wire.ts` and `agent/index.ts`. Every change is
+  tested.
+
+- **Decision.** Keep the stub, cut to a third of its size, for the one job the
+  real merchant cannot do: answering with a body a well-behaved merchant never
+  sends. Two of those are claims about the agent and nothing else — an approved
+  order whose status word is **not** `approved` (T07b's paid path, which the
+  agent must carry through rather than reject), and a success body that is
+  neither documented shape, which must throw rather than become a refusal
+  (D73). Its input schema is now the merchant's own `mandateWireSchema`,
+  imported rather than copied, so a field added to the mandate reaches the stub
+  with nobody remembering to update it. That also deleted a cast: the
+  merchant's schema already parses to a `Mandate`.
+- **Alternative.** Delete the stub outright, now that the real tool has
+  shipped — the tidier-looking option, and the one the pre-review raised. The
+  other alternative, keeping it standing in for `place_order` as before, is
+  simply worse than testing against the real thing and was never in question.
+- **Why.** Deleting it would take those two tests with it, and they are the
+  agent's only coverage for meeting a merchant it was not compiled against —
+  which is the normal case for a buyer agent and the whole premise of D77. The
+  real merchant cannot produce either body, by construction: a well-behaved
+  merchant is exactly the thing that never sends them. So the choice is
+  between 116 lines and having no test at all for the case the agent is most
+  likely to meet in the world.
+- **Cost.** A test helper now imports from `merchant/`, so a breaking change
+  there breaks a test in `test/agent/`. That is the right direction for a file
+  whose purpose is to imitate the merchant, and it is the opposite of what the
+  agent itself does (D77) — a reader should not take the stub's import as
+  licence for the agent to do the same. The stub also has to be kept honest by
+  hand: nothing stops it drifting into answering things the real merchant
+  would, which would quietly turn it back into the stand-in D90 just retired.
+
+## D91 · Amends D76 and D77: the refusal list is `error.reasons`, and only that — ACCEPTED (Andrea, 28 Oct)
+
+D76's cost paragraph pointed at an UNVERIFIED note about which field
+`place_order` would use for the failed mandate checks. **It is `error.reasons`,
+and the note is withdrawn.** T07a's `MerchantErrorBody` declares it, D66 ruled
+it, and `toErrorBody` fills it only on `mandate_refused`.
+
+- **Decision.** `agent/refusal.ts` reads `error.reasons` and nothing else.
+- **Alternative.** Keep accepting `error.refusals` and a list of bare code
+  strings as well — the tolerance the first draft shipped, written before the
+  tool existed.
+- **Why.** The pre-review asked for a reason to keep the tolerance or to drop
+  it, and there is no good reason to keep it. `refusals` is a field no
+  merchant has ever sent: the tolerance was a guess, and the test that covered
+  it pinned fiction, which is worse than no test because it reads like
+  evidence. It also cost a reader something real — two alternative shapes to
+  rule out before learning the one that is true. D77's tolerance argument does
+  not reach this far: that argument is about **ignoring fields the agent does
+  not read**, which keeps working against a merchant that adds one, and says
+  nothing in favour of guessing at names for a field the agent *does* read.
+- **Cost.** If a future merchant names it something else, the agent reports
+  the refusal with its code and message and an empty reason list rather than
+  the reasons. That is a visible, debuggable loss of detail rather than a
+  silent one, and `refusal.test.ts` has a test asserting exactly this
+  behaviour for `refusals`, so the choice is recorded where it would be
+  rediscovered.
+
+## D92 · Amends D77: money off the wire is read as `number`, not `int` — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** The money fields in `agent/wire.ts` are `z.number()`. Counts —
+  `quantity` and `cart_version` — stay `z.int()`.
+- **Alternative.** `z.int()` for money too, as the first draft had it and as
+  the merchant's own internal schemas use.
+- **Why.** D67 made this argument for the merchant's mandate schema and it
+  transfers unchanged to the agent's reader: a schema that enforces a rule
+  turns a breach of it into a parse failure. With `z.int()`, a merchant
+  quoting a fractional amount made the agent say *"`get_quote` returned a body
+  the agent cannot read"* and throw — losing the amount, the quote id and any
+  chance of reporting what actually happened. Whether an amount is a legal
+  integer of minor units is the mandate policy's call (`amount_invalid`, D58),
+  made against the merchant's own stored quote, and an agent re-deciding it
+  earlier and less well can only destroy information. Counts keep `int`
+  because they are not money and a fractional quantity is nothing the agent
+  could act on or report usefully.
+- **Cost.** The agent will carry a fractional price as far as `place_order`
+  and let the merchant refuse it, where the old code failed at the quote. One
+  more round trip, in exchange for a refusal that names the real problem.
+
+## D93 · Amends D70: one builder for the merchant's stores, with the ids asserted by name — ACCEPTED (Andrea, 28 Oct)
+
+T07a replaced `createMerchantState`'s positional arguments with an options
+object (D60). That change was caught by the compiler — three arguments where
+one was expected — and the three call sites in T08's tests were a hard build
+error, not a silent one.
+
+The silent failure was next door, and worth writing down because it bit this
+task once already. `CartStore` and `QuoteStore` take an **all-optional**
+options object, and in the first draft they were called positionally:
+`new CartStore(CATALOGUE, sequentialCartIds())`. A function satisfies an
+object type whose every property is optional, so that compiled, and the id
+factory was quietly dropped — the stores fell back to random UUIDs while the
+tests went on asserting nothing about the ids. It surfaced only because one
+test named `cart_000001` and failed. The pre-review flagged the same hazard
+for this round, which is the right instinct: the compiler cannot see a
+positional-to-options migration when every field is optional.
+
+- **Decision.** Every construction of the merchant's stores goes through one
+  builder, `deterministicMerchant()` in `test/agent/harness.ts`, which sets the
+  cart, quote, order and confirmation-token factories and a mandate policy on a
+  frozen clock. Tests assert `cart_000001`, `quote_000001`, `order_000001` and
+  `confirm_000001` **by name**.
+- **Alternative.** Fix the three call sites where they stand, each assembling
+  its own stores with its own factories — the smaller diff, and what the
+  compiler error strictly asked for.
+- **Why.** The compiler error was never the real problem; the dropped factory
+  was, and that one is invisible. Three call sites are three chances to drop a
+  factory again on the next migration, and a test that asserts nothing about
+  an id cannot tell you it happened. One builder means one place to follow when
+  `createMerchantState` changes again, and asserting the ids by name means a
+  factory that stops arriving **fails a test** rather than silently weakening
+  one. D70's seam is what made this cheap: the tests needed a merchant, not a
+  rewrite.
+- **Cost.** The agent suites share one merchant builder, so a test wanting a
+  different merchant passes options rather than assembling stores itself. That
+  is the trade D60 already made one level down. The general lesson is the part
+  worth keeping: when an options object is entirely optional, the test that
+  proves the options arrived has to assert on their **effect** — a named id —
+  and never on the shape of the call.
+
 ---
 
 ## T07b · Merchant confirm_order and rail call
 
 D80 to D89 are T07b's. All are **PROPOSED**: Andrea has not ruled on them.
+
+This section sits *after* D90 to D93 because the file is ordered by task and
+not by number: T08's round-2 addendum took the next free numbers while T07b
+was in review, and this range was allotted before it. The file already orders
+ranges this way — T04's D58 and D59 sit before T05's D50 to D57 for the same
+reason — and it is append-only, so the alternative was editing above.
 
 T07a stopped at the authorisation decision: `place_order` returned `approved`
 and neither the rail nor `recordSpend()` was called. This task closes that
@@ -1692,10 +2106,19 @@ bank (D55).
   where a mistake costs money, and there should be exactly one copy of it to
   read and one set of tests against it.
 - **Cost.** **This is a wire change.** `place_order` answered `approved` on
-  main an hour ago and answers `paid` now, so anything written against the
-  T07a body — T08's buyer agent and its tests — has to read the new word. The
-  agent's own behaviour does not change: it carries the success status through
-  and still stops on `awaiting_confirmation` (D74). `place_order` is also no
+  main and answers `paid` now, so anything written against the T07a body has
+  to read the new word. T08's buyer agent was the one caller, and what it cost
+  is worth recording because it is the measure of whether D76's seam and D77's
+  narrow reader were worth their price: **no production code in `agent/`
+  changed at all.** `approvedSchema` already read `status` as a plain string —
+  D90 put it that way for exactly this path — and `run.ts` switches on the
+  agent's own outcome word, so a `paid` body arrives as an `ordered` run with
+  nothing recompiled. Six assertions in `test/agent/` were claims about the
+  merchant rather than about the agent, and those did have to move: the
+  six-tool list, a test that relied on `confirm_order` being absent, and four
+  bodies reading `status: 'approved'`. The agent's behaviour is unchanged: it
+  carries the success status through and still stops on
+  `awaiting_confirmation` without confirming (D74). `place_order` is also no
   longer a cheap call: it waits for a payment rail, so a slow rail is a slow
   tool call, and there is no progress reporting. And an order that fails at the
   rail now takes its quote with it (D64 frees a quote only for a *refused*

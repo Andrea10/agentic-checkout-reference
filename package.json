@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "demo": "tsx demo.ts",
     "lint": "eslint ."
@@ -23,6 +24,7 @@
     "vitest": "5.0.5"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/server": "2.4.0",
     "zod": "4.6.7"
   }
