@@ -24,3 +24,4 @@ T07a claimed 2026-10-28T11:47:04Z
 T08 PR #15 opened 2026-10-28T12:02:01Z
 T08 VERIFIED: the v2 client negotiates MCP revision 2026-07-28 (era modern) against merchant/stdio.ts; the SDK default posture and an McpServer mounted without serveStdio both give 2025-11-25 2026-10-28T12:02:01Z
 T07a PR #16 opened 2026-10-28T12:04:30Z
+T08 review round 1 fixed (merged T07a; order step now runs against the real place_order; 5 collisions fixed) 2026-10-28T13:14:34Z
