@@ -368,3 +368,271 @@ T06b appends them here, wording unchanged except the numbering.
 - Cost: one more reason for T04 to handle, and a thin line to hold — it is
   structural validation, so it must not drift into the field-level checks that
   belong to T04.
+
+---
+
+## T06b · Merchant quote and ACP shaping
+
+D27 to D39 are PROPOSED and await a ruling. All thirteen come out of reading
+four ACP files in full on 2026-10-28, under
+`agentic-commerce-protocol/agentic-commerce-protocol/spec/2026-04-17/`:
+`openapi/openapi.feed.yaml`, `json-schema/schema.feed.json`,
+`openapi/openapi.agentic_checkout.yaml` and
+`json-schema/schema.agentic_checkout.json`. Nothing below is a conformance
+claim: the merchant speaks MCP, not ACP's HTTP endpoints, and these entries are
+the list of places the two part company.
+
+## D27 · ACP spec version 2026-04-17, not `unreleased` — PROPOSED (T06b)
+
+- **Decision.** Shape to the `spec/2026-04-17/` directory, the latest stable
+  version, and name that version in the code (`ACP_SPEC_VERSION` in
+  `merchant/acp.ts`).
+- **Alternative.** `spec/unreleased/`, which is where the next version's field
+  names appear first; or an older dated directory.
+- **Why.** A reference implementation should be readable against something a
+  reader can open and check. `unreleased` can change under us between a reader
+  cloning the repo and running it, and SOURCES.md records dates read for
+  exactly this reason.
+- **Cost.** The repo will drift behind ACP. The version is in one constant and
+  the mapping is in one file (`merchant/acp.ts`), so the drift is visible and
+  cheap to close, but nothing automated tells us it has happened.
+
+## D28 · ACP vocabulary on the wire only; the internal types keep `*_minor` — PROPOSED (T06b)
+
+- **Decision.** `merchant/catalogue.ts` and `merchant/cart.ts` keep
+  `price_minor`, `unit_price_minor`, `line_total_minor` and `subtotal_minor`.
+  The translation to ACP names (`price.amount`, `unit_amount`, `totals`)
+  happens in `merchant/acp.ts` and `merchant/quote.ts`, at the wire boundary.
+- **Alternative.** Rename the internal types too, so there is one vocabulary
+  from the catalogue array to the JSON on stdout.
+- **Why.** The `_minor` suffix is load-bearing for a reader: it says, at every
+  use, that the number is pence and not pounds (D16), which is the single
+  easiest mistake to make in payments code. ACP's `amount` says nothing about
+  units at the point of use, only in its schema description. Keeping the
+  internal names also means T07's mandate checks — which compare against
+  `amount_cap_minor` on the mandate — read in one vocabulary throughout.
+- **Cost.** Two names for the same number, and a reader has to hold the mapping
+  in their head when moving between `merchant/cart.ts` and `merchant/quote.ts`.
+  The mapping functions are the only place a rename can go wrong, which is why
+  `test/merchant/acp.test.ts` asserts the whole shaped object field by field.
+
+## D29 · One ACP variant per catalogue product, with the same id — PROPOSED (T06b)
+
+- **Decision.** Each catalogue product becomes an ACP feed `Product` holding
+  exactly one `Variant`, and the variant's `id` is the product's `id`.
+- **Alternative.** A distinct variant id (`prod_x_default`, say), or giving the
+  catalogue real variants with sizes and colours.
+- **Why.** ACP's feed requires `variants` and makes the variant, not the
+  product, the purchasable thing with a price. Our catalogue has one price per
+  product, so the variant is not a dimension of anything — it is a wrapper. The
+  same id means an agent that read a product id out of `list_products` can pass
+  it straight to `add_to_cart` and `get_quote` without carrying a second
+  identifier, which keeps the cart tools (D11) unchanged.
+- **Cost.** It hides the distinction ACP is drawing. A real merchant's product
+  id and variant id differ, and code written against this repo would have to
+  learn that the moment a second size appeared. The variant also repeats the
+  product's `title` and `description`, which is redundant on the wire.
+
+## D30 · `stock` leaves the product object; the quote line carries the number — PROPOSED (T06b)
+
+- **Decision.** The ACP product carries only `availability.available` and
+  `availability.status`. The integer stock level appears once, on the quote's
+  line item, as ACP's `available_quantity`.
+- **Alternative.** Keep an integer `stock` field on the shaped product as a
+  merchant extension.
+- **Why.** The feed schema sets `additionalProperties: false` and has nowhere
+  to put a count, so an extra field would make the object something the
+  published schema rejects. ACP's checkout `LineItem` *does* define
+  `available_quantity`, so the number has a proper home — and the quote is the
+  better place for it anyway, because that is the moment the agent is deciding
+  whether to commit.
+- **Cost.** An agent browsing the catalogue learns only "in stock", "limited"
+  or "out of stock", not how many. It cannot size a cart from `list_products`
+  alone: it has to add items and read the quote, and may be refused on the way
+  (D17 — stock is checked, never reserved). `available_quantity` on the quote is
+  a snapshot for the same reason, so T07's `place_order` re-checks.
+
+## D31 · The two ACP files disagree on the low-stock word, and each object keeps its own — PROPOSED (T06b)
+
+- **Decision.** The product's `availability.status` uses the feed schema's
+  `limited_stock`. The quote line's `availability_status` uses the checkout
+  schema's `low_stock`. The two helpers in `merchant/acp.ts`
+  (`feedAvailabilityStatus`, `checkoutAvailabilityStatus`) differ by that one
+  token and nothing else.
+- **Alternative.** Pick one word and use it in both objects.
+- **Why.** This is a real divergence inside ACP 2026-04-17, not a mistake on
+  our side: `schema.feed.json` describes `Availability.status` as extensible
+  with known values `in_stock, limited_stock, backorder, preorder,
+  out_of_stock, discontinued`, while `schema.agentic_checkout.json` defines
+  `LineItem.availability_status` as a closed enum of `in_stock, low_stock,
+  out_of_stock, backorder, pre_order`. The checkout one is a closed enum, so
+  sending `limited_stock` there would be invalid. Note the two also spell
+  pre-order differently (`preorder` against `pre_order`).
+- **Cost.** Two words for one idea in one codebase, which looks like a bug
+  until you read this entry — so `test/merchant/acp.test.ts` has a test whose
+  only job is to assert the difference on purpose. If ACP reconciles the two
+  files, this entry and one helper go away.
+
+## D32 · The currency code stays upper case — PROPOSED (T06b)
+
+- **Decision.** `GBP`, upper case, everywhere: on the ACP product price and on
+  the quote.
+- **Alternative.** Lower-case `gbp`, which is what the ACP checkout examples
+  show (`currency: usd`).
+- **Why.** ISO 4217 codes are upper case, and the feed schema enforces it:
+  `Price.currency` carries `pattern: ^[A-Z]{3}$`. The checkout schema sets no
+  pattern on `CheckoutSession.currency` and its examples are lower case, so
+  only one of the two files constrains us, and it constrains us upwards.
+- **Cost.** A quote whose `currency` does not look like ACP's own checkout
+  examples. An ACP client that compares currency codes as raw strings against a
+  lower-case literal would not match ours.
+
+## D33 · `list_products` returns the ACP `ProductsResponse` exactly: no `count`, no `currency` — PROPOSED (T06b)
+
+- **Decision.** The body is `{ "products": [...] }` and nothing else. T06a's
+  `count` and top-level `currency` are gone.
+- **Alternative.** Keep them as a convenience superset of ACP.
+- **Why.** `ProductsResponse` in the feed schema requires `products` and sets
+  `additionalProperties: false`, so a superset is a body the published schema
+  rejects. Both fields were also redundant: `count` is `products.length`, and
+  the currency is on every price. The tool still takes this merchant's own
+  `category` and `max_price_minor` filters, which is an addition to the *input*
+  and not a divergence — the ACP feed API has no query parameters at all.
+- **Cost.** A breaking change to a surface T06a shipped, which is what D15
+  warned about. An agent that read `count` gets `undefined`.
+
+## D34 · The cart keeps its own shape; the quote is the ACP checkout object — PROPOSED (T06b)
+
+- **Decision.** `create_cart` and `add_to_cart` return the internal cart
+  (`cart_id`, `items`, `subtotal_minor`, `version`). `get_quote` returns an
+  object shaped to ACP's `CheckoutSession`.
+- **Alternative.** Make the cart itself a `CheckoutSession` with status
+  `incomplete`, so there is one object through the whole flow.
+- **Why.** ACP has no unpriced cart: the checkout session is created already
+  priced, with `totals`, `fulfillment_options` and a readiness `status`. A cart
+  shaped as a session would have to answer "what do I owe you?" before anything
+  had been quoted, and would carry nine required fields that are empty or
+  meaningless until it is. Pricing is also exactly where the interesting
+  decisions are (expiry, staleness, what is and is not quoted), so it deserves
+  its own object. D11's cart tools were ruled and shipped; this leaves them
+  alone.
+- **Cost.** Two shapes in one flow, and the mapping from cart line to quote
+  line is code that can drift from the cart. A reader coming from ACP will
+  look for `/checkout_sessions` and find a cart plus a quote instead. If Stage
+  2 ever speaks ACP over HTTP, the cart has nowhere to go.
+
+## D35 · Money in a quote is ACP `Total` entries, with the currency stated once — PROPOSED (T06b)
+
+- **Decision.** Every amount in a quote is a `{ type, display_text, amount }`
+  triple in a `totals` array, per line and for the cart. `currency` appears
+  once, on the quote. The cart-level array is `items_base_amount`, `subtotal`,
+  `total`; the per-line array is `subtotal`, `total`.
+- **Alternative.** A flat pair of integers (`subtotal_minor`, `total_minor`) as
+  the cart has, or the ACP feed's `Price` object (`{ amount, currency }`) on
+  each amount.
+- **Why.** It is the checkout schema's own shape, `display_text` and all, and
+  it is the shape that survives a merchant that *does* have tax and shipping:
+  adding a line is adding an entry, not changing the type. The currency goes
+  once because that is where the checkout session puts it, and repeating `GBP`
+  on nine amounts invites them to disagree.
+- **Cost.** Reading one number is a `find` over an array rather than a property
+  access, which is why `totalOf()` exists in `merchant/quote.ts`. Nothing in
+  the type system stops the array holding two `subtotal` entries or none. The
+  three cart-level totals are all the same number today, which looks like
+  padding until you know it is the quote saying there are no adjustments.
+
+## D36 · No `tax` and no `fulfillment` lines at all, rather than zeros — PROPOSED (T06b)
+
+- **Decision.** A quote carries no `tax` total, no `fulfillment` total and an
+  empty `fulfillment_options`. `messages` and `links` are empty too, and the
+  advertised schema says so with `maxItems: 0`.
+- **Alternative.** Emit `tax` and `fulfillment` as zero-amount lines, so the
+  shape is complete and an agent can sum a fixed set of keys.
+- **Why.** There is no tax and no shipping anywhere in this repo: the
+  catalogue has no tax class, no weight and no destination, and the PRD's
+  non-goals say so. A zero tax line is a claim — "this purchase attracts no
+  tax" — that a synthetic catalogue in one country cannot support. An absent
+  line says "not computed", which is true. VAT on these goods would be 20% in
+  the UK, so a zero would be wrong rather than merely incomplete.
+- **Cost.** `total` equals `subtotal` in every quote this merchant issues,
+  which is not what a real checkout looks like, and an agent written against
+  this repo could reasonably assume it always will. An agent summing a fixed
+  list of total types has to treat absent as zero, or as unknown, and we have
+  not told it which. If Stage 2 adds a real rail, tax is the first thing
+  missing.
+
+## D37 · A quote is `ready_for_payment`, and an empty cart is refused — PROPOSED (T06b)
+
+- **Decision.** Every quote this merchant issues has ACP status
+  `ready_for_payment`. Quoting an empty cart is refused with a new
+  `cart_empty` code through the D13 error envelope.
+- **Alternative.** Use the status field to carry readiness — return a quote
+  with status `not_ready_for_payment`, no line items and a `messages` entry
+  explaining why — and never refuse.
+- **Why.** The ACP statuses describe a session being filled in over several
+  calls: `incomplete` until there is an address, `not_ready_for_payment` until
+  there is a payment method. This merchant collects neither, so the only two
+  honest answers are "here is your price" and "there is nothing to price".
+  Refusing keeps one failure envelope for the agent to learn (D13's stated
+  goal), and it keeps the rule that a quote is a priced promise: an object
+  called a quote should never be a quote for nothing.
+- **Cost.** `status` is a constant, so a reader may wonder why it is there at
+  all — it is there because ACP requires it, and because T07 will need the
+  `pending_approval` path when the mandate's human-confirm threshold trips. The
+  alternative is arguably more ACP-native, since ACP's own design is to answer
+  with a session and put the reason in `messages` rather than to fail the call;
+  an agent that only reads `status` will not notice an `isError` result. This
+  is the entry I would most like overruled if you disagree.
+
+## D38 · A quote expires after fifteen minutes and is tied to one cart version — PROPOSED (T06b)
+
+- **Decision.** A quote carries `created_at`, `expires_at`
+  (`QUOTE_TTL_SECONDS` = 900) and `cart_version`, the cart's change counter at
+  the moment it was priced. `QuoteStore.current()` refuses `quote_expired` once
+  the expiry is reached and `quote_stale` once the cart has moved on. `Cart`
+  gains a `version` integer, 1 on creation and +1 per successful change.
+- **Alternative.** No expiry and no tie, re-pricing at order time instead; or a
+  content hash of the cart lines instead of a counter; or ACP's `quote_id` and
+  `quote_expires_at` fields, which exist for a session *based on* a separate
+  quote.
+- **Why.** These two are the authorisation point of the whole object. Without
+  the version tie, an agent can be shown £14.50, have the cart changed under it,
+  and place an order for whatever is in there now — the quote would be a
+  decoration rather than a commitment. Without an expiry, the merchant owes a
+  price forever, which is the thing every real merchant refuses to do. A
+  counter rather than a hash because the cart is the only writer, the counter
+  is one line, and it makes the refusal message say *which* version went stale.
+  `expires_at` rather than `quote_expires_at` because this object *is* the
+  quote, not a session referring to one.
+- **Cost.** A counter invalidates on any change, including one that leaves the
+  price identical — a hash would not, and would also catch a cart mutated by
+  something that forgot to bump the counter. Fifteen minutes is our number, not
+  a merchant rule or a spec default. The expiry is read off the injected clock,
+  so a test or demo that freezes time freezes the expiry with it. `cart_id` and
+  `cart_version` are fields ACP does not define, so a strict ACP client would
+  reject the quote on `additionalProperties`.
+
+## D39 · Quotes are held server-side and addressed by `quote_id` — PROPOSED (T06b)
+
+- **Decision.** A `QuoteStore` holds issued quotes in the server process,
+  mirroring `CartStore`: random `quote_<uuid>` ids by default,
+  `sequentialQuoteIds()` injectable for tests and the T09 demo. T07's
+  `place_order` is expected to take a `quote_id` and call
+  `QuoteStore.current()`.
+- **Alternative.** Issue the quote and keep nothing: have `place_order` take
+  the quote object back from the agent, or re-price the cart from scratch at
+  order time.
+- **Why.** The merchant has to be able to say "this is the price I quoted", and
+  it cannot do that from an object the agent hands back, because the agent is
+  the party the mandate exists to bound — a returned quote is an input to be
+  distrusted, not a record. MCP is stateless, so the identifier has to be
+  explicit in the arguments, which is D11's reasoning applied again. Re-pricing
+  at order time would work but would lose the expiry and the staleness
+  distinction: the agent would learn the price changed only by being charged a
+  different number.
+- **Cost.** Quotes die with the process and are never evicted while it lives,
+  exactly as carts are (D11), so a long-lived server leaks them and a
+  horizontally scaled merchant would need a real store. An expired quote is
+  kept deliberately, so that the refusal can name expiry rather than a missing
+  id — which means the map only ever grows. T09's demo must keep one server
+  alive across the whole run, which D11 already required.

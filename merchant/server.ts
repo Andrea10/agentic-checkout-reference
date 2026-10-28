@@ -2,9 +2,13 @@
  * The merchant MCP server.
  *
  * Built on the MCP TypeScript SDK v2 (`@modelcontextprotocol/server`, 2.x,
- * implementing MCP revision 2026-07-28; ruled D09). The four tools here are
- * the catalogue and cart surface. `get_quote` is T06b; `place_order` and
- * `confirm_order` are T07.
+ * implementing MCP revision 2026-07-28; ruled D09). The five tools here are
+ * the catalogue, cart and quote surface. `place_order` and `confirm_order`
+ * are T07.
+ *
+ * Products and quotes are advertised in the ACP vocabulary (see `acp.ts`), so
+ * the `outputSchema` a client reads off `tools/list` is an ACP feed product
+ * and an ACP checkout session.
  */
 
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
@@ -20,6 +24,9 @@ import {
   getProduct,
   getProductInput,
   getProductOutput,
+  getQuote,
+  getQuoteInput,
+  getQuoteOutput,
   listProducts,
   listProductsInput,
   listProductsOutput,
@@ -72,7 +79,7 @@ export function createMerchantServer(
     {
       title: 'List products',
       description:
-        'List the merchant catalogue. Optionally filter by category or by a maximum price in GBP minor units (pence).',
+    'List the merchant catalogue as Agentic Commerce Protocol feed products. Optionally filter by category or by a maximum price in GBP minor units (pence).',
       inputSchema: listProductsInput,
       outputSchema: listProductsOutput,
       annotations: { readOnlyHint: true, idempotentHint: true },
@@ -84,7 +91,8 @@ export function createMerchantServer(
     'get_product',
     {
       title: 'Get product',
-      description: 'Read one product by its catalogue id.',
+      description:
+        'Read one product by its catalogue id, as an Agentic Commerce Protocol feed product.',
       inputSchema: getProductInput,
       outputSchema: getProductOutput,
       annotations: { readOnlyHint: true, idempotentHint: true },
@@ -116,6 +124,19 @@ export function createMerchantServer(
       annotations: { readOnlyHint: false },
     },
     (args) => run(() => addToCart(state, args)),
+  );
+
+  server.registerTool(
+    'get_quote',
+    {
+      title: 'Get quote',
+      description:
+        'Price a cart and return a quote, shaped to the Agentic Commerce Protocol checkout session: line items, totals, status and an expiry. The quote is tied to the cart version it priced, so changing the cart makes it stale. Refuses an empty cart.',
+      inputSchema: getQuoteInput,
+      outputSchema: getQuoteOutput,
+      annotations: { readOnlyHint: false, idempotentHint: false },
+    },
+    (args) => run(() => getQuote(state, args)),
   );
 
   return server;

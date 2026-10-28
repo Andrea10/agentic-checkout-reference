@@ -26,7 +26,16 @@ import { createMerchantServer, SERVER_INFO } from '../../merchant/server.js';
  */
 const PROTOCOL_VERSION = '2025-11-25';
 
-const CLIENT_INFO = { name: 't06a-raw-test-client', version: '0.1.0' };
+const CLIENT_INFO = { name: 'merchant-raw-test-client', version: '0.1.0' };
+
+/** The tools the merchant advertises, in sorted order. */
+const TOOL_NAMES = [
+  'add_to_cart',
+  'create_cart',
+  'get_product',
+  'get_quote',
+  'list_products',
+];
 
 /** A JSON-RPC response as the tests read it. */
 interface RpcResponse {
@@ -141,16 +150,11 @@ describe('merchant server over raw JSON-RPC (in-memory transport)', () => {
     await fresh.close();
   });
 
-  it('advertises exactly the four T06a tools', async () => {
+  it('advertises exactly the five catalogue, cart and quote tools', async () => {
     const response = await client.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual([
-      'add_to_cart',
-      'create_cart',
-      'get_product',
-      'list_products',
-    ]);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(TOOL_NAMES);
   });
 
   it('advertises an input and an output schema for every tool', async () => {
@@ -164,28 +168,34 @@ describe('merchant server over raw JSON-RPC (in-memory transport)', () => {
     }
   });
 
-  it('lists products through tools/call', async () => {
+  it('lists products through tools/call, in the ACP feed shape', async () => {
     const result = asToolResult(
       await client.request('tools/call', { name: 'list_products', arguments: {} }),
     );
-    const body = bodyOf(result) as { count: number; currency: string };
+    const body = bodyOf(result) as {
+      products: { id: string; variants: { price: { amount: number; currency: string } }[] }[];
+    };
 
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toEqual(body);
-    expect(body.count).toBeGreaterThanOrEqual(8);
-    expect(body.currency).toBe('GBP');
+    expect(Object.keys(body)).toEqual(['products']);
+    expect(body.products.length).toBeGreaterThanOrEqual(8);
+    expect(body.products[0]?.variants[0]?.price.currency).toBe('GBP');
   });
 
-  it('gets one product through tools/call', async () => {
+  it('gets one product through tools/call, priced on the ACP variant', async () => {
     const result = asToolResult(
       await client.request('tools/call', {
         name: 'get_product',
         arguments: { product_id: 'prod_aurora_desk_lamp' },
       }),
     );
-    const body = bodyOf(result) as { product: { price_minor: number } };
+    const body = bodyOf(result) as {
+      product: { title: string; variants: { price: { amount: number } }[] };
+    };
 
-    expect(body.product.price_minor).toBe(4250);
+    expect(body.product.title).toBe('Aurora Desk Lamp');
+    expect(body.product.variants[0]?.price.amount).toBe(4250);
   });
 
   it('carries the cart across calls by cart_id alone', async () => {
@@ -211,6 +221,79 @@ describe('merchant server over raw JSON-RPC (in-memory transport)', () => {
     expect(body.cart.cart_id).toBe(cart.cart_id);
     expect(body.cart.items).toHaveLength(1);
     expect(body.cart.subtotal_minor).toBe(4798);
+  });
+
+  it('quotes a cart through tools/call', async () => {
+    const created = asToolResult(
+      await client.request('tools/call', {
+        name: 'create_cart',
+        arguments: { items: [{ product_id: 'prod_cobbleford_mug', quantity: 2 }] },
+      }),
+    );
+    const { cart } = bodyOf(created) as { cart: { cart_id: string } };
+
+    const quoted = asToolResult(
+      await client.request('tools/call', {
+        name: 'get_quote',
+        arguments: { cart_id: cart.cart_id },
+      }),
+    );
+    const { quote } = bodyOf(quoted) as {
+      quote: {
+        id: string;
+        status: string;
+        currency: string;
+        line_items: { product_id: string; totals: { type: string; amount: number }[] }[];
+        totals: { type: string; amount: number }[];
+        expires_at: string;
+        cart_id: string;
+        cart_version: number;
+      };
+    };
+
+    expect(quoted.isError).toBeFalsy();
+    expect(quoted.structuredContent).toEqual(bodyOf(quoted));
+    expect(quote.id).toMatch(/^quote_/);
+    expect(quote.status).toBe('ready_for_payment');
+    expect(quote.currency).toBe('GBP');
+    expect(quote.cart_id).toBe(cart.cart_id);
+    expect(quote.cart_version).toBe(2);
+    expect(quote.line_items).toHaveLength(1);
+    expect(quote.line_items[0]?.product_id).toBe('prod_cobbleford_mug');
+    expect(quote.totals.find((entry) => entry.type === 'total')?.amount).toBe(2900);
+    expect(Date.parse(quote.expires_at)).toBeGreaterThan(Date.now());
+  });
+
+  it('refuses a quote for an empty cart over the wire', async () => {
+    const created = asToolResult(
+      await client.request('tools/call', { name: 'create_cart', arguments: {} }),
+    );
+    const { cart } = bodyOf(created) as { cart: { cart_id: string } };
+
+    const result = asToolResult(
+      await client.request('tools/call', {
+        name: 'get_quote',
+        arguments: { cart_id: cart.cart_id },
+      }),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect((bodyOf(result) as { error: { code: string } }).error.code).toBe('cart_empty');
+  });
+
+  it('advertises the ACP checkout vocabulary in get_quote\u2019s output schema', async () => {
+    const response = await client.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      outputSchema?: unknown;
+    }[];
+    const quoteTool = tools.find((tool) => tool.name === 'get_quote');
+    const advertised = JSON.stringify(quoteTool?.outputSchema ?? {});
+
+    for (const field of ['line_items', 'totals', 'ready_for_payment', 'expires_at']) {
+      expect(advertised).toContain(field);
+    }
   });
 
   it('returns a refusal as isError with a structured code', async () => {
@@ -333,24 +416,23 @@ describe('merchant server over a spawned stdio process', () => {
     const response = await client.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual([
-      'add_to_cart',
-      'create_cart',
-      'get_product',
-      'list_products',
-    ]);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(TOOL_NAMES);
   });
 
-  it('runs a catalogue-to-cart round trip over the pipe', async () => {
+  it('runs a catalogue-to-cart-to-quote round trip over the pipe', async () => {
     const listed = asToolResult(
       await client.request('tools/call', {
         name: 'list_products',
         arguments: { category: 'kitchen' },
       }),
     );
-    const { products } = bodyOf(listed) as { products: { id: string }[] };
+    const { products } = bodyOf(listed) as {
+      products: { id: string; variants: { price: { amount: number } }[] }[];
+    };
     const first = products[0];
     expect(first).toBeDefined();
+    const unitAmount = first?.variants[0]?.price.amount ?? 0;
+    expect(unitAmount).toBeGreaterThan(0);
 
     const created = asToolResult(
       await client.request('tools/call', {
@@ -367,7 +449,65 @@ describe('merchant server over a spawned stdio process', () => {
       /^cart_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
     expect(cart.items).toHaveLength(1);
-    expect(cart.subtotal_minor).toBeGreaterThan(0);
+    expect(cart.subtotal_minor).toBe(unitAmount);
+
+    const quoted = asToolResult(
+      await client.request('tools/call', {
+        name: 'get_quote',
+        arguments: { cart_id: cart.cart_id },
+      }),
+    );
+    const { quote } = bodyOf(quoted) as {
+      quote: { id: string; totals: { type: string; amount: number }[] };
+    };
+
+    expect(quote.id).toMatch(
+      /^quote_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(quote.totals.find((entry) => entry.type === 'total')?.amount).toBe(unitAmount);
+  });
+
+  it('refuses a quote for a cart that was changed after quoting, over the pipe', async () => {
+    const created = asToolResult(
+      await client.request('tools/call', {
+        name: 'create_cart',
+        arguments: { items: [{ product_id: 'prod_elderflint_notebook', quantity: 1 }] },
+      }),
+    );
+    const { cart } = bodyOf(created) as { cart: { cart_id: string; version: number } };
+
+    const before = bodyOf(
+      asToolResult(
+        await client.request('tools/call', {
+          name: 'get_quote',
+          arguments: { cart_id: cart.cart_id },
+        }),
+      ),
+    ) as { quote: { cart_version: number; totals: { type: string; amount: number }[] } };
+
+    await client.request('tools/call', {
+      name: 'add_to_cart',
+      arguments: {
+        cart_id: cart.cart_id,
+        product_id: 'prod_elderflint_notebook',
+        quantity: 1,
+      },
+    });
+
+    const after = bodyOf(
+      asToolResult(
+        await client.request('tools/call', {
+          name: 'get_quote',
+          arguments: { cart_id: cart.cart_id },
+        }),
+      ),
+    ) as { quote: { cart_version: number; totals: { type: string; amount: number }[] } };
+
+    // The old quote still prices the old version; the new one has moved on.
+    expect(after.quote.cart_version).toBe(before.quote.cart_version + 1);
+    expect(after.quote.totals.find((entry) => entry.type === 'total')?.amount).toBe(
+      (before.quote.totals.find((entry) => entry.type === 'total')?.amount ?? 0) * 2,
+    );
   });
 
   it('refuses an unknown product over the pipe', async () => {

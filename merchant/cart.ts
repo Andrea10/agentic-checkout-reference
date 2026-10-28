@@ -29,13 +29,20 @@ export interface CartLine {
  * A cart as the tools return it.
  *
  * `subtotal_minor` is the sum of the lines and nothing else: no shipping, tax
- * or fulfilment. A priced quote is T06b's `get_quote`.
+ * or fulfilment. A priced quote shaped to the ACP checkout vocabulary is
+ * `get_quote` in `quote.ts`.
+ *
+ * `version` counts the changes made to this cart, starting at 1 for a cart
+ * that has just been created. A quote records the version it was made from, so
+ * a cart that has moved on since makes that quote stale (D38).
  */
 export interface Cart {
   readonly cart_id: string;
   readonly currency: Currency;
   readonly items: readonly CartLine[];
   readonly subtotal_minor: number;
+  /** Change counter. Bumped on every successful mutation. */
+  readonly version: number;
   readonly created_at: string;
   readonly updated_at: string;
 }
@@ -138,6 +145,7 @@ export class CartStore {
       currency: CURRENCY,
       items: [],
       subtotal_minor: 0,
+      version: 1,
       created_at: timestamp,
       updated_at: timestamp,
     };
@@ -195,6 +203,7 @@ export class CartStore {
       ...cart,
       items,
       subtotal_minor: subtotalOf(items),
+      version: cart.version + 1,
       updated_at: this.#now(),
     };
     this.#carts.set(cartId, updated);

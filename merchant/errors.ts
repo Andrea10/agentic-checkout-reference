@@ -7,12 +7,17 @@
  * one failure envelope.
  */
 
-/** Every refusal this task can raise. T06b and T07 append their own. */
+/** Every refusal the merchant can raise. T07 appends its own. */
 export type MerchantErrorCode =
   | 'product_not_found'
   | 'cart_not_found'
   | 'invalid_quantity'
-  | 'insufficient_stock';
+  | 'insufficient_stock'
+  // T06b: quoting.
+  | 'cart_empty'
+  | 'quote_not_found'
+  | 'quote_expired'
+  | 'quote_stale';
 
 /** A refusal the agent is expected to read and act on. */
 export class MerchantError extends Error {

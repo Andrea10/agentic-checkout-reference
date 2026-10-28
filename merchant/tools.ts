@@ -1,48 +1,48 @@
 /**
- * The four catalogue-and-cart tools, as plain functions.
+ * The five catalogue, cart and quote tools, as plain functions.
  *
  * The functions here know nothing about MCP: they take validated arguments
  * and return the body that goes on the wire, or throw a
  * {@link MerchantError}. `server.ts` registers them; the tests call them
  * directly. Keeping the two apart means a refusal can be tested without a
- * transport, and T06b/T07 can add tools without touching this seam.
+ * transport, and T07 can add tools without touching this seam.
+ *
+ * Products and quotes go on the wire in the ACP vocabulary (`acp.ts`), not
+ * the internal one: `price.amount` rather than `price_minor`. The internal
+ * types in `catalogue.ts` and `cart.ts` are unchanged, so the mapping happens
+ * here and nowhere else (D28).
  */
 
 import * as z from 'zod';
 
+import { acpProductsResponseSchema, acpProductSchema, toAcpProduct } from './acp.js';
 import { CATALOGUE, CURRENCY, findProduct, type Product } from './catalogue.js';
 import { CartStore, MAX_LINE_QUANTITY, type Cart } from './cart.js';
 import { MerchantError } from './errors.js';
+import { QuoteStore, quoteSchema } from './quote.js';
 
 /** Everything the tools read or write. One instance per server. */
 export interface MerchantState {
   readonly catalogue: readonly Product[];
   readonly carts: CartStore;
+  readonly quotes: QuoteStore;
 }
 
-/** Builds the default state: the synthetic catalogue and an empty cart store. */
+/** Builds the default state: the synthetic catalogue, and empty cart and quote stores. */
 export function createMerchantState(
   catalogue: readonly Product[] = CATALOGUE,
   carts: CartStore = new CartStore(catalogue),
+  quotes: QuoteStore = new QuoteStore(catalogue, carts),
 ): MerchantState {
-  return { catalogue, carts };
+  return { catalogue, carts, quotes };
 }
 
 // --- wire shapes -----------------------------------------------------------
 //
 // Described with zod so the same definition serves as the tool's advertised
-// JSON Schema and as the runtime check. ACP vocabulary is deliberately absent:
-// mapping these onto the ACP product feed and checkout objects is T06b.
-
-const productSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  price_minor: z.int(),
-  currency: z.literal(CURRENCY),
-  category: z.string(),
-  stock: z.int(),
-});
+// JSON Schema and as the runtime check. The product and quote shapes come
+// from `acp.ts`; the cart keeps its internal shape, because ACP has no
+// concept of an unpriced cart (D34).
 
 const cartLineSchema = z.object({
   product_id: z.string(),
@@ -57,6 +57,7 @@ const cartSchema = z.object({
   currency: z.literal(CURRENCY),
   items: z.array(cartLineSchema),
   subtotal_minor: z.int(),
+  version: z.int(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -95,6 +96,10 @@ export const createCartInput = z.object({
     .describe('Optional items to put in the new cart.'),
 });
 
+export const getQuoteInput = z.object({
+  cart_id: z.string().describe('Cart id returned by create_cart.'),
+});
+
 export const addToCartInput = z.object({
   cart_id: z.string().describe('Cart id returned by create_cart.'),
   product_id: z.string().describe('Catalogue id of the product to add.'),
@@ -108,33 +113,30 @@ export const addToCartInput = z.object({
 
 // --- tool result schemas ---------------------------------------------------
 
-export const listProductsOutput = z.object({
-  products: z.array(productSchema),
-  count: z.int(),
-  currency: z.literal(CURRENCY),
-});
+/** Exactly the ACP feed `ProductsResponse`: the list and nothing else (D33). */
+export const listProductsOutput = acpProductsResponseSchema;
 
-export const getProductOutput = z.object({ product: productSchema });
+export const getProductOutput = z.object({ product: acpProductSchema });
 
 export const cartOutput = z.object({ cart: cartSchema });
+
+export const getQuoteOutput = z.object({ quote: quoteSchema });
 
 export type ListProductsArgs = z.infer<typeof listProductsInput>;
 export type GetProductArgs = z.infer<typeof getProductInput>;
 export type CreateCartArgs = z.infer<typeof createCartInput>;
 export type AddToCartArgs = z.infer<typeof addToCartInput>;
+export type GetQuoteArgs = z.infer<typeof getQuoteInput>;
 
 export type ListProductsResult = z.infer<typeof listProductsOutput>;
 export type GetProductResult = z.infer<typeof getProductOutput>;
 export type CartResult = z.infer<typeof cartOutput>;
+export type GetQuoteResult = z.infer<typeof getQuoteOutput>;
 
 // --- serialisation ---------------------------------------------------------
 //
 // The internal types use readonly arrays; the wire shapes do not. Copying
 // here keeps the stored cart immutable from the caller's side.
-
-function productToWire(product: Product): z.infer<typeof productSchema> {
-  return { ...product };
-}
 
 function cartToWire(cart: Cart): z.infer<typeof cartSchema> {
   return { ...cart, items: cart.items.map((line) => ({ ...line })) };
@@ -142,7 +144,14 @@ function cartToWire(cart: Cart): z.infer<typeof cartSchema> {
 
 // --- handlers --------------------------------------------------------------
 
-/** Lists the catalogue, optionally filtered by category and price ceiling. */
+/**
+ * Lists the catalogue as ACP feed products, optionally filtered.
+ *
+ * The filters are the merchant's own: the ACP feed API has no query
+ * parameters, so `category` and `max_price_minor` are an addition rather than
+ * a divergence. They are expressed in internal terms (minor units) because
+ * that is what the caller has to type.
+ */
 export function listProducts(
   state: MerchantState,
   args: ListProductsArgs = {},
@@ -153,9 +162,9 @@ export function listProducts(
       (product) =>
         args.max_price_minor === undefined || product.price_minor <= args.max_price_minor,
     )
-    .map(productToWire);
+    .map(toAcpProduct);
 
-  return { products, count: products.length, currency: CURRENCY };
+  return { products };
 }
 
 /** Reads one product. Throws `product_not_found` when the id is unknown. */
@@ -164,7 +173,7 @@ export function getProduct(state: MerchantState, args: GetProductArgs): GetProdu
   if (product === undefined) {
     throw new MerchantError('product_not_found', `no product with id ${args.product_id}`);
   }
-  return { product: productToWire(product) };
+  return { product: toAcpProduct(product) };
 }
 
 /** Creates a cart and returns it, with its new `cart_id`. */
@@ -176,4 +185,16 @@ export function createCart(state: MerchantState, args: CreateCartArgs = {}): Car
 export function addToCart(state: MerchantState, args: AddToCartArgs): CartResult {
   const cart = state.carts.addItem(args.cart_id, args.product_id, args.quantity);
   return { cart: cartToWire(cart) };
+}
+
+/**
+ * Prices a cart and returns the quote.
+ *
+ * Refuses `cart_not_found` for an unknown cart and `cart_empty` for an empty
+ * one. Calling it twice on an unchanged cart issues two quotes with the same
+ * totals and different ids; calling it after the cart changed issues a quote
+ * for the new contents and leaves the old one stale (D38).
+ */
+export function getQuote(state: MerchantState, args: GetQuoteArgs): GetQuoteResult {
+  return { quote: state.quotes.issue(args.cart_id) };
 }
