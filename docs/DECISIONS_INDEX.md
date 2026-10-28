@@ -4,7 +4,7 @@
 
 The table below is generated from its `## D..` headings: every id, every title
 and every status, verbatim. **115 decisions, D01 to D115, with no gaps.** The
-first 109 are all ACCEPTED — ruled by Andrea, 24 on 27 October and 85 on 28
+first 109 are all ACCEPTED — ruled by Andrea, 25 on 27 October and 84 on 28
 October, with none outstanding. The last six are this task's own and are
 PROPOSED, awaiting a ruling.
 
