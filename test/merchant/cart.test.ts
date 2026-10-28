@@ -26,7 +26,27 @@ describe('CartStore', () => {
     expect(cart.items).toEqual([]);
     expect(cart.subtotal_minor).toBe(0);
     expect(cart.currency).toBe('GBP');
+    expect(cart.version).toBe(1);
     expect(cart.created_at).toBe('2026-10-27T00:00:00.000Z');
+  });
+
+  it('counts its changes in version, so a quote can tell it moved (D38)', () => {
+    const carts = storeWithFixedClock();
+    const cartId = carts.create().cart_id;
+
+    expect(carts.get(cartId).version).toBe(1);
+    expect(carts.addItem(cartId, 'prod_cobbleford_mug', 1).version).toBe(2);
+    expect(carts.addItem(cartId, 'prod_cobbleford_mug', 1).version).toBe(3);
+    expect(carts.addItem(cartId, 'prod_elderflint_notebook', 1).version).toBe(4);
+  });
+
+  it('does not bump version on a refused change', () => {
+    const carts = storeWithFixedClock();
+    const cartId = carts.create().cart_id;
+    carts.addItem(cartId, 'prod_harrowmere_blanket', 5);
+
+    expect(() => carts.addItem(cartId, 'prod_harrowmere_blanket', 5)).toThrow();
+    expect(carts.get(cartId).version).toBe(2);
   });
 
   it('defaults to unguessable ids: distinct, UUID-shaped, never sequential', () => {
