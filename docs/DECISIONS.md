@@ -2156,3 +2156,198 @@ bank (D55).
   from `stdio.ts` also records nothing about its payments anywhere, which looks
   broken until you read this entry or D54 — the demo is where that gets fixed,
   and T09 has to remember to.
+
+## D94 · Settlements go in the audit log, as a second kind of entry — PROPOSED
+
+- **Decision.** `AuditEntry` becomes a discriminated union on a new `kind`
+  field: `mandate_check`, which is the entry that existed before, and
+  `settlement`, which records what the rail did about the money. Both kinds
+  live in the **one** log, appended in the order they happened, so a payment
+  reads directly under the decision that allowed it. A settlement entry
+  carries `at`, `mandate_id`, `order_id`, `amount_minor`, `currency`,
+  `outcome`, and — on a decline — the rail's `code` and `origin`. It does not
+  carry the agent or the merchant: the check immediately above it does, and
+  the two share a `mandate_id`.
+- **Alternative.** A second log beside the first, `policy.settlements`, with
+  its own `print()`: no change to `AuditEntry` at all, and no union for a
+  reader to narrow. Or one flat entry type with every field of both kinds
+  optional, which needs no `kind` at all. Or leave it as D86 had it, with the
+  decline on the error body only.
+- **Why.** The order is the thing an auditor cannot reconstruct afterwards.
+  "Allowed at 12:00:00, declined at 12:00:01" is one story in one list; the
+  same two facts in two lists have to be interleaved by timestamp by whoever
+  reads them, and a reader who has only one of the two lists cannot tell
+  whether the other exists. PRD R5 asks for one log, and the gap D86 named is
+  exactly that a reader of the log could not see the refusal. A union rather
+  than optional fields because the compiler then refuses to let anyone read
+  `reasons` off a settlement or `order_id` off a check — the shape T04 chose
+  for `PolicyDecision` (D41) and T07b for `Order` (D80), used a third time.
+- **Cost.** **This is a type change in `mandate/`.** Anything that read
+  `entries()[0].agent` now has to narrow on `kind` first, which is why the
+  three readers in `test/merchant/support/merchant-harness.ts` exist and why
+  `test/mandate/policy.test.ts` grew a `kind` in one assertion. T09's demo is
+  being written in parallel: `print()` is unchanged, so a demo that prints the
+  log is unaffected, but one that reads `entries()` field by field will need
+  the same narrowing. A settlement line also cannot be read on its own — it
+  names no agent — so the log is a record to be read in order rather than a
+  set of self-contained rows, which is a fair description of a journal and a
+  poor description of a table.
+
+## D95 · One log, two entrances, and the check lines do not move — PROPOSED
+
+- **Decision.** `AuditLog` gains a second entrance, `recordSettlement()`,
+  beside `record()`. Each builds and freezes its own entry and pushes it; there
+  is still no way to amend or remove one. `formatEntry` dispatches on `kind`
+  and prints both kinds in the same six columns — time, outcome, amount, who
+  or what, mandate, detail — with the order id where a check puts the parties,
+  and the decline (or the unanswered call) where a check puts its reasons. The
+  settlement outcome words are the merchant's existing ones: `paid` from the
+  order status and the success body, and `payment_declined`, `capture_failed`
+  and `rail_unavailable` from `MerchantErrorCode`. A check line is byte-for-byte
+  what it was before.
+- **Alternative.** One entrance, `append(entry)`, taking a finished entry of
+  either kind: fewer methods, and a caller that can build whatever it likes.
+  Or new, shorter words sized to the column (`declined`, `unavailable`). Or a
+  separate `formatSettlement()` and let the demo decide what to call.
+- **Why.** One entrance per kind keeps the property that makes this log worth
+  reading: a caller cannot write an entry the log did not build, so no entry
+  can be malformed or unfrozen, and `checkMandate()` still cannot forget to
+  log (D48's reason, now twice). The words are the merchant's own because a
+  word that means one thing on the wire and another in the log is a word a
+  reader has to translate: an agent told `payment_declined` should find
+  `payment_declined` in the log. And they happen to fit — `confirm_required`,
+  `payment_declined` and `rail_unavailable` are all exactly sixteen
+  characters, so the existing column width held and no check line moved, which
+  a test asserts by checking that the amount starts at the same offset on
+  every line of either kind.
+- **Cost.** Two entrances mean two places to keep in step if the log ever
+  grows a third kind; a third would be the moment to reconsider the flat
+  `append`. The sixteen-character coincidence is load-bearing for the layout
+  and nothing enforces it beyond a test: a fifth outcome word of seventeen
+  characters would silently push one line's columns right. And the two kinds
+  share columns that do not mean quite the same thing — column four is a pair
+  of parties on one line and an order id on the next — which reads well in a
+  terminal and would not survive being parsed as a table (D46's cost, which is
+  why `entries()` exists).
+
+## D96 · The audit line carries the decline's code and origin, and not its message — PROPOSED
+
+- **Decision.** A settlement entry's `decline` is `{ code, origin }`, both
+  typed `string` in `mandate/audit.ts` rather than imported from `rail/`. The
+  rail's `message` is not copied into the log, and neither is anything from a
+  rail that threw: that entry carries only `rail_call`, the call that went
+  unanswered.
+- **Alternative.** Pass the whole `RailDecline` through, message included, as
+  the error body does (D86) — and import `DeclineCode` and `DeclineOrigin`
+  from `rail/` so the log's vocabulary is the rail's closed union.
+- **Why.** Two reasons, and they point the same way. First, dependencies:
+  nothing in `mandate/` imports `rail/`, because the mandate layer is the part
+  of this repo a reader might lift on its own (D49), and a structural
+  `{ code, origin }` is satisfied by a `RailDecline` unchanged — the merchant
+  passes one in and the compiler checks it, with no coupling either way.
+  Second, content: `origin` is the field that has to survive (D53, D86), the
+  `code` is what a reader branches on, and the message is prose that already
+  travels on the error body and in the rail's own log. For a rail that *threw*
+  the message is worse than redundant — D85 keeps it off the wire because a
+  real rail's internal errors carry hosts, URLs and sometimes credentials, and
+  this log is printed to a terminal in the demo, so the same rule applies with
+  more force.
+- **Cost.** The log's `code` is `string` where the rail's is a closed union, so
+  a typo in a hand-built entry would compile; the merchant's only call site
+  passes the rail's object through, so the narrowing is enforced where it
+  happens rather than where it is stored. An auditor who wants the decline's
+  sentence needs the rail's log or the error body, which is one more source for
+  one more detail — but the code and the origin are the two things D86 said a
+  reader must not have to parse out of prose, and they are both here.
+
+## D97 · The settlement line is stamped from the policy's clock, and carries the amount the rail took — PROPOSED
+
+- **Decision.** The `at` on a settlement entry comes from `policy.clock()`,
+  the same clock the mandate decisions are stamped from, read at the moment
+  the outcome is known. The rail's `authorised_at` and `captured_at` stay
+  where they are, on the order. `amount_minor` is the captured amount on
+  `paid`, and the amount attempted — the order's own total — on the three
+  failures.
+- **Alternative.** Stamp the line with the rail's own timestamp, which is the
+  time the money actually moved. Or carry both. Or always record the order's
+  amount, so every line about one order reads the same number.
+- **Why.** A log whose lines come from two clocks cannot be read in order, and
+  reading it in order is the whole point of putting settlements in it (D94).
+  `StubRail`'s clock starts at a synthetic epoch nine months before the
+  merchant's, so a rail-stamped settlement would sort above the decision that
+  caused it; a real rail's clock would merely be a few seconds out and skew
+  invisibly. The entry's `at` therefore means what it means on a check line —
+  when this log recorded this event — which is also why this is not the second
+  opinion of one event that D80 refused to add. The amount follows D87 one
+  step along: a budget is a record of money that left, so the line that says
+  money left says how much the rail reported taking, and the line above it
+  says what was authorised. When they differ, an auditor sees the difference
+  instead of having to reconcile the ledger against the rail.
+- **Cost.** The log does not say when the rail says it moved the money; that
+  is on the order and in the rail's log, and the two can be minutes apart for
+  a slow rail with no way to tell from the log alone. And one order can now
+  show two amounts in the log — authorised above, captured below — which is
+  the truth and is also the kind of discrepancy a reader may read as a bug
+  before reading this entry.
+
+## D98 · `settle()` is the one writer, and it writes before the ledger — PROPOSED
+
+- **Decision.** Every settlement entry is written inside `settle()` in
+  `merchant/pay.ts`, at the point each outcome becomes known: after the order's
+  own state transition, and on the paid path *before* `recordSpend()`.
+  `place_order` and `confirm_order` write none of their own and know nothing
+  about it. A rail that threw gets a line too.
+- **Alternative.** Write the line in each tool after `settle()` returns or
+  throws, which is where the tool knows what the agent will be told. Or inside
+  `AuditLog`, by handing it the rail's result. Or after `recordSpend()`, so a
+  line is written only once budget and log agree.
+- **Why.** The sequence authorise-capture-record is the part of this repo where
+  a mistake costs somebody money, and D88 put exactly one copy of it in one
+  function for that reason; the record of what that sequence did belongs in the
+  same place, or the two copies drift and one tool starts logging what the other
+  does not. Writing before the ledger follows from what each step means: once
+  the capture succeeded the money has moved, so the auditor's line is true from
+  that instant, and a throw out of `recordSpend` then leaves a log that still
+  says so. A rail that threw gets a line because "we asked and got no answer"
+  is precisely what an auditor needs to see — it is not a claim about the
+  money, and D85's refusal to guess at the order's state is not a reason to
+  leave the attempt invisible.
+- **Cost.** The audit log and the ledger can now disagree in a new way: on the
+  paid path the log says `paid` a moment before the budget is consumed, so a
+  failure between the two leaves a log that is right and a ledger that is
+  short. That window is the non-atomic step T12 already owns (it is D87's
+  ordering cost, one line further on), and this choice picks which of the two
+  records is the one to trust. `settle()` also now needs the policy's clock as
+  well as its ledger and log, which it already had through `PaymentContext`, so
+  nothing in the signature changed — but a reader looking for the audit writes
+  has to know to look in `pay.ts` and not in the tools.
+
+## D99 · A refusal that never reached the rail settles nothing, and logs nothing — PROPOSED
+
+- **Decision.** A `confirm_order` call refused before the rail — unknown or
+  spent token, lapsed hold, stock gone, or a mandate re-check that refused —
+  leaves **no settlement entry**. The mandate re-check leaves its own
+  `mandate_check` entry when it runs, as it already did; the three refusals
+  before it leave nothing. D65 stays exactly as ruled for `place_order`: a
+  stock refusal there still leaves no entry of either kind.
+- **Alternative.** Log every refused call now that the log has a `kind` to
+  distinguish events with — a third kind, `refusal`, so that every
+  `place_order` and `confirm_order` call appears somewhere, which is the
+  literal reading of T07a's definition of done that D65 declined.
+- **Why.** The log answers two questions — was this purchase authorised, and
+  what happened to the money — and a call refused for a lapsed hold answers
+  neither: nothing was decided about the mandate and nothing was settled. The
+  symmetry with D65 is the point: that entry's reasoning was that an `allow`
+  written for an order then refused for want of stock would be a lie told to
+  the one reader who matters, and a `settlement` written where no rail was
+  called would be the same lie about the money. A third kind would also change
+  what this log *is* — a record of decisions and settlements, not a request
+  log — and a merchant request log is a different thing with a different
+  retention story, which is Stage 2's at the earliest.
+- **Cost.** The hole D65 named is still there and is now visible from one more
+  side: an expired hold, a spent token and a sold-out line leave no trace
+  anywhere once the call has returned, so an auditor cannot tell a human who
+  was asked and never answered from one who was never asked. The refusal is in
+  the error body the agent got and nowhere else. T10 lists this among the known
+  limits, and if Andrea wants every call logged, the fix is a third kind here
+  and not a second log.
