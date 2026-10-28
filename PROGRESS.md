@@ -20,3 +20,5 @@ T05 PR #10 opened 2026-10-28T08:39:43Z
 T04 PR #11 opened 2026-10-28T08:39:46Z
 T06b PR #12 opened 2026-10-28T08:42:14Z
 T08 claimed 2026-10-28T11:43:34Z
+T08 PR #15 opened 2026-10-28T12:02:01Z
+T08 VERIFIED: the v2 client negotiates MCP revision 2026-07-28 (era modern) against merchant/stdio.ts; the SDK default posture and an McpServer mounted without serveStdio both give 2025-11-25 2026-10-28T12:02:01Z
