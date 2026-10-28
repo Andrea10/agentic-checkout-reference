@@ -27,13 +27,17 @@ description was always going to live (D10).
   "per_transaction_cap_minor": 2500,
   "valid_from": "2026-10-25T00:00:00Z",
   "valid_until": "2026-10-26T00:00:00Z",
-  "human_confirm_above_minor": 2000,
-  "signature": "<Ed25519 over the ten fields above, base64url>"
+  "human_confirm_above_minor": 3000,
+  "signature": "<Ed25519 over the ten fields above, base64url — not printed>"
 }
 ```
 
-That is the run-2 mandate `npm run demo` prints, with the signature withheld
-(D103).
+That is copied from `npm run demo`, which prints the mandate JSON **once**, in
+run 1 (`scripts/demo.ts`, `printMandateJson` is called from `runOne` only). The
+signature placeholder is the demo's own: the key pair is generated fresh in
+memory every run and nothing derived from it is printed, which is what keeps
+two invocations byte-identical (D103). Run 2's mandate differs in two fields
+and is described rather than printed — see §1a.
 
 | Field | Type | Holds | Checked by |
 | --- | --- | --- | --- |
@@ -58,6 +62,31 @@ does not cover — `SIGNATURE_FIELD` names it, and the canonicaliser strips it
 Money is always an integer count of minor units: 2500 is £25.00, never 25.0
 (D16). `MinorUnits` is an unbranded `number`, so the check happens at run time
 at every boundary money crosses (`mandate/ledger.ts`).
+
+### 1a. The demo's two mandates
+
+The demo issues two, and they differ in **two** fields
+(`scripts/demo.ts`, `RUN_ONE` and `RUN_TWO`):
+
+| Field | Run 1 | Run 2 |
+| --- | --- | --- |
+| `mandate_id` | `11111111-1111-4111-8111-111111111111` | `22222222-2222-4222-8222-222222222222` |
+| `human_confirm_above_minor` | 3000 | 2000 |
+
+Every other field is identical, including the 5000 total cap, the 2500
+per-transaction cap and the 25-to-26 October window. The basket is 2045 pence
+both times, so **the threshold is the field that decides the path** — under it
+in run 1, over it in run 2.
+
+The `mandate_id` differs for a different reason, and not to isolate the
+budgets: each run calls `startMerchant()`, which builds its own
+`createMandatePolicy(...)`, so each run already has its own spend ledger and
+its own audit log (`scripts/demo.ts`). The ids are distinct because they have
+to be **literals** rather than `randomUUID()` for the output to be
+reproducible (D103), and giving each run its own makes the audit lines say
+which authority they belong to — run 1's log names `1111…`, run 2's names
+`2222…`. D106 describes the two runs as differing by exactly one field; it is
+ruled, so D116 records the correction rather than editing it.
 
 ## 2. How it is signed
 
@@ -260,9 +289,9 @@ the concept has no field in AP2 as read.
 | `agent` | `cnf` on an open mandate, which carries the agent's public key as a JWK for key binding. The specification says open mandates "MUST include the agent's public key as a `cnf` claim" | **The most important row.** AP2 binds the agent **cryptographically**; we bind it **by name only**. Our `agent_mismatch` compares a signed name with a caller-supplied string and nothing proves the caller is that agent (D61). AP2's `cnf` is exactly the mechanism that gap is missing. |
 | `merchant` | open Checkout Mandate: an entry in `constraints` of type `checkout.allowed_merchants`, whose `allowed` is a list of Merchant objects `{id, name, website?}`. Closed Payment Mandate: `payee`, one Merchant object | **Partial.** The concept matches and is the closest thing to a direct hit. AP2 allows a **list** of merchants and a structured object; ours is exactly one merchant as a bare string. |
 | `currency` | `payment_amount.currency` on the Payment Mandate — "ISO-4217 3-letter alphabetic currency code" | **Match in vocabulary, divergence in placement.** Both are ISO 4217. AP2's sits on the amount of *one* payment; ours denominates a standing set of caps. |
-| `amount_cap_minor` | — (`payment_amount.amount` is "Amount in minor units, according to the ISO-4217 spec", but it is the amount of *this* payment, not a cumulative ceiling) | **Divergence, and a real one.** A cumulative cap across transactions is not an AP2 mandate field as read. AP2's open-mandate constraints bound the **content** of a purchase — which merchants, which line items, what quantity — where ours bounds the **cumulative spend**, enforced against a ledger the mandate knows nothing about (D44). Pleasingly, the unit agrees exactly: AP2 and this repo both count minor units as integers (D16). |
-| `per_transaction_cap_minor` | UNVERIFIED | The constraint types seen are `checkout.allowed_merchants`, `checkout.line_items` and `payment.reference`. **Whether AP2 defines an amount-ceiling constraint type could not be established from the pages read**, so no equivalent is claimed. |
-| `valid_from` | — (`iat` is issuance, which is not the same claim) | **Divergence.** Ours states an explicit opening instant; AP2 as read has no "not valid before" separate from issuance. |
+| `amount_cap_minor` | the `payment.budget` constraint on an open Payment Mandate: `max` (number, required, "Maximum amount for the budget.") and `currency` (required). Its Evaluation reads: "the requested amount plus the total sum of amounts from previously closed Payment Mandates MUST be less than or equal to `max`. After approval, the amount MUST be added to the accumulated total for future evaluation." | **The closest thing in AP2 to anything in this repo, and a match in semantics.** That paragraph is our spend ledger, specified: check the request against the accumulated total, then add to it. We do the same in `mandate/policy.ts` (`amount_cap_minor` less `ledger.spent(mandate_id)`) and `mandate/ledger.ts`. The divergence is **where the accumulated total lives and how long it lasts**: AP2 leaves it with whoever verifies the mandate, and ours is an in-memory `Map` in one merchant process, so a restart honours the full cap again and two merchant processes under one mandate would each allow all of it (D44). One unit note: AP2 types `budget.max` as `number` and does not say minor units, where its `payment.amount_range.max` does; ours is always an integer of minor units (D16). |
+| `per_transaction_cap_minor` | the `payment.amount_range` constraint on an open Payment Mandate: `max` (integer, required, "Maximum allowed amount in minor (cents) unit of currency"), `min` (integer, optional, "Minimal amount in minor (cents) unit of currency. If absent, there is no minimum") and `currency` (string, required, "ISO4217 Alpha-3 currency code") | **Near-match, and the closest of any row on units.** AP2's `max` is a per-payment ceiling in minor units with the currency carried beside it, which is exactly what `per_transaction_cap_minor` plus `currency` is. Its Evaluation — "The `payment_amount` property of the Payment Mandate MUST be within the range defined by `min` and `max`. The `currency` property of the Payment Mandate MUST match the `currency` property of this constraint" — is `per_transaction_cap_exceeded` and `currency_mismatch` together, and in the same order the policy runs them (D43). Two differences: AP2 also offers a floor (`min`), which we have no use for, and its constraint carries its own currency where ours is denominated once for the whole mandate. |
+| `valid_from` | — for the mandate's own validity (`iat` is issuance, which is not the same claim). The nearest named field is `not_before` ("Earliest valid execution date") on the `payment.execution_date` constraint, which bounds *when the payment may execute*, not when the authority opens | **Divergence.** Ours states an explicit instant before which the authority is not usable, and refuses `mandate_not_yet_valid` against it. AP2 has no such claim on either mandate: a mandate is usable from issuance until `exp`. `execution_date.not_before` is a different question asked about the payment. |
 | `valid_until` | `exp` | **Match.** The nearest thing to a clean one. AP2's is an integer Unix epoch and ours an ISO 8601 string. AP2 additionally recommends setting `exp` on open mandates "to the smallest value that will allow the Shopping Agent to complete the assigned task" — advice this repo does not follow, since a demo mandate runs for a day. |
 | `human_confirm_above_minor` | — | **Divergence, and ours is the addition.** AP2 draws the human line structurally — Direct mode versus Autonomous mode, with the Trusted Surface rendering the mandate to the User — rather than with a per-amount threshold inside the credential. A number above which software must stop and ask is this repository's own idea, and it is the one the demo is built to show. |
 | `signature` | the SD-JWT itself: a JWS with selective-disclosure salted claim digests | **Divergence, ruled.** Ours is a raw Ed25519 signature over canonical JSON carried in the object's own `signature` member (D22, D23, D24). No selective disclosure, no JWT header to negotiate algorithms with, and **no interoperability with an AP2 verifier** — if Stage 2 needs one, the signing format changes, not just the encoding. |
@@ -271,6 +300,37 @@ AP2 fields with no counterpart here at all, because there is no Payment
 Mandate: `payment_instrument` (`{id, type, description?}`), `pisp`,
 `execution_date`, `risk_data`, and on the Checkout Mandate `checkout_jwt` and
 `checkout_hash`.
+
+### 5.1a AP2's ten constraint types, and which of ours each answers
+
+An open mandate's `constraints` array is where AP2 puts everything our flat
+mandate puts in named fields, so the inventory is the fairest way to see how
+much of our mandate AP2 already has. There are **ten** constraint types, each
+with its own heading, property table and Evaluation paragraph — eight on the
+Payment Mandate page and two on the Checkout Mandate page, all read
+2026-10-28.
+
+| AP2 constraint type | What it bounds | Our nearest field |
+| --- | --- | --- |
+| `payment.amount_range` | `max`, optional `min`, `currency` — the amount of one payment, in minor units | `per_transaction_cap_minor` plus `currency` |
+| `payment.budget` | `max`, `currency` — the accumulated total across previously closed Payment Mandates | `amount_cap_minor`, against the spend ledger |
+| `payment.allowed_payees` | `allowed`, an array of Merchant objects | `merchant` (ours is one, not a list) |
+| `payment.agent_recurrence` | `frequency` (`ON_DEMAND`, `DAILY`, `WEEKLY`, `BIWEEKLY`, `MONTHLY`, `QUARTERLY`, `ANNUALLY`) and optional `max_occurrences` | **nothing.** We have no order-rate limit; PRD §6 names it as out of scope |
+| `payment.execution_date` | optional `not_before` and `not_after` on when the payment may execute | **nothing** |
+| `payment.allowed_payment_instruments` | `allowed`, an array of PaymentInstrument | **nothing** — there is no instrument in this repo, only a rail |
+| `payment.allowed_pisps` | `allowed`, an array of Pisp | **nothing** |
+| `payment.reference` | `conditional_transaction_id`, the digest of the associated open Checkout Mandate | **nothing** — our binding is the stored quote, not a digest (D39) |
+| `checkout.allowed_merchants` | `allowed`, an array of Merchant `{id, name, website?}` | `merchant` |
+| `checkout.line_items` | `items`, an array of LineItemRequirements `{id, acceptable_items, quantity}` | **nothing.** We bound the total, never the basket's contents |
+
+Read down the right-hand column and the shape of the divergence is clear:
+**AP2 bounds mostly content and cadence, and we bound mostly money.** Three of
+ours have a close AP2 counterpart (`per_transaction_cap_minor`,
+`amount_cap_minor`, `merchant`), and the three AP2 constraints with no
+counterpart here that a reviewer should notice are `agent_recurrence` (a rate
+limit), `checkout.line_items` (what may be bought) and
+`allowed_payment_instruments` (what it may be bought with). Of ours,
+`human_confirm_above_minor` is the one with no AP2 constraint at all.
 
 ### 5.2 Structural divergences
 
@@ -307,10 +367,15 @@ AP2 it carries real weight: `checkout_jwt` is selectively disclosable while
 `checkout_hash` is not, so a verifier can be given the binding without the
 basket.
 
-**No Mandate Receipts, no scope reduction.** AP2's agent stores an open
-mandate, closed mandate and receipt tuple and reduces the scope of the open
-mandate as it is used. Our equivalent is the spend ledger, which is the
-merchant's, not the agent's, and is not a credential at all (D44).
+**No Mandate Receipts, and the running total sits in one place only.** AP2
+keeps the history on both sides: the verifier accumulates against
+`payment.budget` ("After approval, the amount MUST be added to the accumulated
+total for future evaluation") and the agent stores an open mandate, closed
+mandate and receipt tuple and reduces the scope of its open mandate as it is
+used (`/ap2/agent_authorization/`). We have only the verifier half — the spend
+ledger — and it is the merchant's, not the agent's, is not a credential, and
+does not survive the process (D44). So an agent here cannot tell what it has
+left without asking, and no second party can check the merchant's arithmetic.
 
 ## 6. Revocation
 
@@ -363,7 +428,9 @@ changes:
 1. SOURCES.md says the open Checkout Mandate "carries constraints:
    `checkout.allowed_merchants` and `checkout.line_items`". More precisely,
    those two are **`type` values of entries in a `constraints` array**, not
-   field names; the sub-fields are `allowed` and `items` respectively.
+   field names; the sub-fields are `allowed` and `items` respectively. They are
+   also only two of **ten** constraint types across the two mandate pages: the
+   other eight are on the Payment Mandate page and are listed in §5.1a.
 2. SOURCES.md does not mention `cnf`, `iat` or `exp` on the **open** Checkout
    Mandate. The page lists all three.
 3. SOURCES.md says the Payment Mandate is "Bound to the checkout by hash"
@@ -373,18 +440,31 @@ changes:
 SOURCES.md belongs to T02 and this task may not edit it; the three points above
 are recorded here and in this task's pull request instead.
 
+### The `vct` form: resolved, and one documentation slip
+
+The versioned form is normative. The specification page has a **Mandate
+Versioning** section stating that "Implementations MUST match the exact `vct`
+string, including the version suffix", so `mandate.payment.1` and
+`mandate.checkout.open.1` are the values an implementation uses.
+
+The unversioned text that appears in the `vct` row of each schema table —
+"MUST be 'mandate.checkout'" and "MUST be 'mandate.payment'" — is therefore a
+slip in those two table cells rather than a second rule. Nothing in this
+repository depends on either form.
+
 ### UNVERIFIED
 
-- **Whether AP2 defines an amount-ceiling constraint type**, which is what
-  `per_transaction_cap_minor` would map to. Three constraint types were seen —
-  `checkout.allowed_merchants`, `checkout.line_items`, `payment.reference` —
-  and no exhaustive list of constraint types was found on the pages read.
+One item, down from three. The other two were answerable from the pages §7
+already cites and are resolved above and in §5.1a; they were wrong to mark.
+
 - **Whether any AP2 mandate field names the User**, which is what `principal`
-  would map to. None appears in the field tables read.
-- **Which `vct` form is normative.** The pages give versioned values
-  (`mandate.checkout.1`, `mandate.checkout.open.1`, `mandate.payment.1`,
-  `mandate.payment.open.1`) while the `vct` row's own description text reads
-  "MUST be 'mandate.checkout'" and "MUST be 'mandate.payment'" — unversioned.
-  Both forms appear on the same pages as read on 2026-10-28. This looks like a
-  documentation slip rather than two rules, but it is not resolved here, and
-  nothing in this repository depends on it.
+  would map to. None appears in the Checkout Mandate or Payment Mandate field
+  tables, in any of the ten constraint types, or anywhere else on the five
+  pages read: the User appears as a party in prose — the one the Trusted
+  Surface renders a mandate to, and who authorises an open one — and the
+  nearest thing to a user-facing string is
+  `payment_instrument.description`, "Description of the instrument to be
+  displayed to the user for informational purposes". So AP2 identifies the
+  payee, the agent (by key), the instrument and the PISP, and not the person.
+  Stated as UNVERIFIED rather than as a flat "AP2 has no such field" because
+  it is an absence across five pages rather than something a page says.

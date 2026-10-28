@@ -10,7 +10,7 @@ Five participants, matching the packages:
 
 | In the diagram | Is | Lives in |
 | --- | --- | --- |
-| Principal | the person who signed the mandate | the demo plays this part in run 2 |
+| Principal | the person who signed the mandate | the demo plays this part: it issues both mandates and calls `confirm_order` in run 2 |
 | Agent | the buyer agent | `agent/` |
 | Merchant | the MCP server and its tools | `merchant/` |
 | Policy | the mandate check, the spend ledger and the audit log | `mandate/` |
@@ -24,7 +24,7 @@ D69).
 
 Run 1 of the demo. The mandate's `human_confirm_above_minor` is 3000 and the
 basket is 2045 pence, so nothing has to be asked and `place_order` pays inside
-the one call (D88, D106).
+the one call (D88, D106, D116).
 
 ```mermaid
 sequenceDiagram
@@ -91,8 +91,12 @@ sequenceDiagram
 ## 2. The held path: a human has to say yes
 
 Run 2 of the demo. Same agent, same catalogue, same basket, same 2045 pence.
-The only difference is one signed field: `human_confirm_above_minor` is 2000
-(D106).
+Two signed fields differ (`scripts/demo.ts`, `RUN_ONE` and `RUN_TWO`):
+`human_confirm_above_minor` is 2000 rather than 3000, which is **the field
+that decides the path**, and `mandate_id` is `2222…` rather than `1111…`,
+which is a literal per run so the output stays reproducible (D103) and each
+run's audit lines name their own authority. D106 says one field; the code says
+two, and D116 records the correction.
 
 ```mermaid
 sequenceDiagram

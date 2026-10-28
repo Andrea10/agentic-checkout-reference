@@ -35,8 +35,9 @@ npm run demo        # two runs: one the mandate covers outright, one a human mus
 `npm run demo` issues a mandate, starts the merchant, runs the agent, pays
 through the stub rail and prints the order, the rail transcript and the audit
 log — twice. The second run trips the human-confirm threshold, so the agent
-stops with a token and the principal confirms. Two runs print byte-identical
-text.
+stops with a token and the principal confirms. The clock is frozen and the ids
+are sequential, so **two invocations of the command print identical text**.
+(The two runs inside one invocation print different text, which is the point.)
 
 Node 22+. No keys needed for Stage 1. `npm run lint`, `npm run build` and
 `npm run typecheck` are the other three scripts.
@@ -49,7 +50,7 @@ Node 22+. No keys needed for Stage 1. `npm run lint`, `npm run build` and
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the pieces, the order states, where each check runs, and **what Stage 1 does not do** |
 | [docs/SEQUENCE.md](docs/SEQUENCE.md) | both paths the demo shows, as diagrams |
 | [docs/MANDATE.md](docs/MANDATE.md) | the mandate field by field, how it is signed, and the field-by-field mapping to AP2 |
-| [docs/DECISIONS_INDEX.md](docs/DECISIONS_INDEX.md) | all 115 decisions in one table, and the ten that matter |
+| [docs/DECISIONS_INDEX.md](docs/DECISIONS_INDEX.md) | all 116 decisions in one table, and the ten that matter |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | every decision in full: what, the alternative, why, and what it cost |
 
 ## Layout

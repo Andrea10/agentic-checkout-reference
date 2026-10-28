@@ -3,9 +3,9 @@
 `docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
-and every status, verbatim. **115 decisions, D01 to D115, with no gaps.** The
+and every status, verbatim. **116 decisions, D01 to D116, with no gaps.** The
 first 109 are all ACCEPTED — ruled by Andrea, 25 on 27 October and 84 on 28
-October, with none outstanding. The last six are this task's own and are
+October, with none outstanding. The last seven are this task's own and are
 PROPOSED, awaiting a ruling.
 
 Counts, which a reviewer can check against the file with
@@ -19,8 +19,8 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 28 Oct, as corrected)` | 1 |
 | `ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)` | 1 |
 | `ACCEPTED (Andrea, 28 Oct; the write order is pinned by a test added to T12)` | 1 |
-| `PROPOSED` | 6 |
-| **Total** | **115** |
+| `PROPOSED` | 7 |
+| **Total** | **116** |
 
 If you have five minutes, read §3 and nothing else.
 
@@ -47,6 +47,7 @@ genuinely needs navigating:
 | D77 | D91, D92 | `error.reasons` only; money off the wire reads as `number` |
 | D62 | D88 | `approved` left the wire; `place_order` answers `paid` |
 | D63 | D82 | a held order got a fifteen-minute expiry |
+| D106 | D116 | the two demo runs differ in two mandate fields, not one |
 
 Ranges, and the task that proposed each, as `docs/DECISIONS.md` itself records
 in the prose above each group:
@@ -66,11 +67,17 @@ in the prose above each group:
 | D90–D93 | T08, round 2 | amendments after `place_order` landed |
 | D94–D99 | T07c | payment events in the audit log |
 | D100–D109 | T09 | the demo |
-| D110–D115 | T10 | these docs |
+| D110–D116 | T10 | these docs |
 
 The file is ordered by task and not by number, which is why D58 and D59 sit
 before D50, and D90 to D93 before D80. It is append-only: a range was allotted
 while another task was in review.
+
+The amendment table has nine rows, not eight, because review round 1 of this
+task found a ninth: D106's claim about the demo's two mandates. That is a
+fifth instance of the class D115 reports — a ruled decision the shipped code
+no longer matches — and the fourth entry in this file to be corrected by
+appending rather than editing.
 
 ## 2. Every decision
 
@@ -191,6 +198,7 @@ while another task was in review.
 | D113 | The docs count the policy checks as two gates and then seven | PROPOSED | Docs | The demo already says "the seven checks", and two counts of the same function would be worse than either. |
 | D114 | Known limits are one list in ARCHITECTURE.md, not scattered | PROPOSED | Docs | A reader judging the authorisation story should be able to find everything it does not do in one place. |
 | D115 | Code and comments that disagree with a decision are reported, not fixed | PROPOSED | Docs | T10's directories are `docs/` and the README; a docs task editing `agent/` would be the drift it is meant to catch. |
+| D116 | Amends D106: the two demo runs differ in two mandate fields, not one | PROPOSED | Demo | `mandate_id` differs as well as the threshold, and only the threshold decides the path. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.
@@ -238,11 +246,16 @@ admitted: budget consumed by a failed payment is budget the user never gets
 back, and between check and record nothing holds the budget, so two concurrent
 orders can exceed the cap. Naming the gap is the decision.
 
-**D39 — quotes are held server-side.** `place_order` takes a `quote_id` and
-reads the amount from the merchant's own stored quote. It matters because it is
-what stops the agent authorising itself: a quote handed back by the agent is an
-input to distrust, not a record, and the agent is exactly the party the mandate
-exists to bound.
+**D39 and D60 — the agent chooses neither the price nor the verifier.** D39
+holds quotes server-side, so `place_order` takes a `quote_id` and reads the
+amount from the merchant's own stored quote: a quote handed back by the agent
+would be an input to distrust, not a record. D60 puts the merchant's own id and
+its trusted issuer key in the environment rather than in the arguments. They
+are one argument from two ends, which is why `ARCHITECTURE.md` §1 cites them
+together, and together they are what stops the agent authorising itself — if
+the caller supplied the merchant id, `merchant_mismatch` could never fire, and
+if it supplied the public key, `signature_invalid` could never fire. Counted as
+one of the ten because neither is worth reading without the other.
 
 **D83 — `confirm_order` re-runs the whole mandate check.** Against the stored
 mandate, the clock and the ledger as they are at confirmation time. It matters
@@ -269,8 +282,10 @@ matters because it is the decision that makes this repository honest about what
 it is: not a conformance claim, with the divergences written down field by
 field in `docs/MANDATE.md`.
 
-**Runners-up**, if you have ten minutes rather than five: D50 (a timeout is not
-a decline), D80 (five order states, and `authorised` is the one that matters),
-D65 (the mandate check is last, so a stock refusal leaves no entry), D75 (the
-protocol revision depends on how the server is mounted), D63 (an order id is a
-name, a confirmation token is a capability).
+**Runners-up**, if you have ten minutes rather than five: D22 and D23 (Ed25519
+over a canonical JSON serialisation, every field present signed — the mechanism
+the rest of it rests on, and the place the AP2 divergence starts), D50 (a
+timeout is not a decline), D80 (five order states, and `authorised` is the one
+that matters), D65 (the mandate check is last, so a stock refusal leaves no
+entry), D75 (the protocol revision depends on how the server is mounted), D63
+(an order id is a name, a confirmation token is a capability).

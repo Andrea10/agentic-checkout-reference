@@ -9,8 +9,9 @@ disagreement is listed in the pull request for this document.
 ## 1. The one idea
 
 This repository is about **authorisation, not the cart** (README, PRD §0).
-The cart is four tools and a hundred lines. The hard part is the question a
-merchant has to answer before it takes money that no human clicked for:
+The shopping half is five tools over a synthetic catalogue
+(`merchant/tools.ts`). The hard part is the question a merchant has to answer
+before it takes money that no human clicked for:
 
 > This software says it may spend £20.45 of someone's money here. Says who?
 
@@ -87,8 +88,8 @@ D09), registering **seven** tools (`merchant/server.ts`):
 | `create_cart` | a cart, returning `cart_id` | `invalid_quantity`, `insufficient_stock` |
 | `add_to_cart` | merges a line into a cart | `cart_not_found`, `invalid_quantity`, `insufficient_stock` |
 | `get_quote` | prices a cart as an ACP checkout session | `cart_not_found`, `cart_empty` |
-| `place_order` | the money-out gate | `merchant_misconfigured`, `quote_not_found`, `quote_expired`, `quote_stale`, `quote_already_ordered`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
-| `confirm_order` | a human's yes, turned into a payment | `merchant_misconfigured`, `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `order_expired`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
+| `place_order` | the money-out gate | `merchant_misconfigured`, `quote_not_found`, `quote_expired`, `quote_stale`, `quote_already_ordered`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
+| `confirm_order` | a human's yes, turned into a payment | `merchant_misconfigured`, `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `order_expired`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
 
 Three in-process stores hold the state MCP will not: carts, quotes and orders
 (`merchant/cart.ts`, `merchant/quote.ts`, `merchant/order.ts`). Each is
@@ -176,10 +177,22 @@ where SCA under PSD2 lands.
 ### `scripts/` — the demo
 
 `npm run demo` runs the whole repository twice and prints both runs
-(`scripts/demo.ts`). The two runs differ by exactly one mandate field,
-`human_confirm_above_minor`: 3000 in run 1, the README's 2000 in run 2, against
-a basket of 2045 pence — so the threshold is the only thing that decides
-whether a human is asked (D106).
+(`scripts/demo.ts`). The two mandates differ in **two** fields, one of them
+deliberate and one of them the point (`scripts/demo.ts`, `RUN_ONE` and
+`RUN_TWO`):
+
+- `human_confirm_above_minor` — 3000 in run 1, the README's 2000 in run 2,
+  against a basket of 2045 pence. **This is the field that decides the path**,
+  and everything else about the two runs is held still so that it is.
+- `mandate_id` — `1111…` and `2222…`. Not for budget isolation: each run calls
+  `startMerchant()` and so gets its own policy, ledger and audit log. The ids
+  are literals rather than `randomUUID()` because the output has to be
+  reproducible (D103), and one each makes every audit line say which authority
+  it belongs to.
+
+D106 says the two runs differ by exactly one mandate field. The code says two,
+so the code wins (see the rule at the top of this document) and D116 records
+the correction.
 
 The demo hosts the merchant **in its own process**, over the SDK's in-memory
 transport, because the audit log lives inside the merchant's policy and
@@ -249,8 +262,10 @@ guess (D85).
 
 ## 4. Where each check runs
 
-Five layers check, and they check different things. Reading them in order is
+Four layers check, and they check different things. Reading them in order is
 the point: the cheap questions come first, and the money question comes last.
+`place_order` and `confirm_order` each run their own sequence; both call into
+the policy, and both end at the rail.
 
 ### `place_order`, in order (`merchant/place-order.ts`, D65)
 
@@ -390,8 +405,9 @@ Three things about this entry are deliberate:
   only which call went unanswered, because a real rail's internal errors carry
   hosts, URLs and sometimes credentials (D85, D96).
 - **The time comes from the policy's clock**, not the rail's (D97). The stub
-  rail's clock starts nine months before the merchant's, so a rail-stamped
-  settlement would sort above the decision that caused it. The rail's own
+  rail's clock starts in January (`STUB_RAIL_EPOCH`) where the merchant's demo
+  clock reads October, so a rail-stamped settlement would sort above the
+  decision that caused it. The rail's own
   `authorised_at` and `captured_at` stay on the order.
 
 ### Two entrances, no exits
@@ -500,8 +516,8 @@ payment *attempt*. Once an attempt reaches `settle()` the token will not send
 the order again, so a declined card means the agent must re-quote and the human
 must be asked a second time. That is deliberate — a retry loop on a held order
 is an agent spending against a decision a person made once — but it is friction
-a real checkout would not accept. **A `retry_order` tool with its own rules is
-the honest fix, and a candidate for Stage 2**, rather than loosening this.
+a real checkout would not accept. D84 names a `retry_order` tool with its own
+rules as the alternative to loosening this.
 
 **Concurrent `confirm_order` calls on one token can grant two authorisations.**
 Nothing is written until `settle()` reaches `markAuthorised`, so two concurrent
@@ -568,4 +584,4 @@ caps (D64 — T12 closes this).
 | `agent/order.ts` | the one place a mandate is presented |
 | `docs/MANDATE.md` | the mandate field by field, and the AP2 mapping |
 | `docs/SEQUENCE.md` | both paths as diagrams |
-| `docs/DECISIONS_INDEX.md` | all 115 decisions, and the ten that matter |
+| `docs/DECISIONS_INDEX.md` | all 116 decisions, and the ten that matter |

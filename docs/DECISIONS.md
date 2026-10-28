@@ -2539,6 +2539,8 @@ bank (D55).
   `test/merchant/place-order.test.ts`) and in PRD R10, which is Stage 2. A
   third run would show it; the task asked for two, and a refusal is better
   read as a test than as a paragraph.
+- *Amended by D116: the two mandates differ in two fields, not one — the
+  threshold and `mandate_id`.*
 
 ## D107 · Money is printed as pounds and pence beside the minor units — ACCEPTED (Andrea, 28 Oct)
 
@@ -2625,11 +2627,14 @@ entry.
 
 - **Decision.** `docs/DECISIONS.md` is left exactly as it stands — no entry
   rewritten, reordered, renumbered or deleted, and no status changed — and
-  `docs/DECISIONS_INDEX.md` is added beside it: a generated table of all 109
-  entries with their ids, titles and statuses verbatim, a map of which entry
-  amends which, and ten decisions picked out for a reader with five minutes.
-  No cross-reference lines were appended to the amended entries either, though
-  the task allowed them.
+  `docs/DECISIONS_INDEX.md` is added beside it: a generated table of **every**
+  entry with its id, title and status verbatim, a map of which entry amends
+  which, and ten decisions picked out for a reader with five minutes.
+  (Corrected in review round 1: this read "all 109 entries", the count before
+  this task appended its own. The index is generated from the headings, so it
+  carries whatever the file holds — 116 as of D116.) One cross-reference line
+  of the kind the brief allowed was appended, on D106, pointing at D116;
+  nothing else above D110 was touched.
 - **Alternative.** The literal reading of the T10 row: consolidate the file.
   Fold D21 into D06, D59 into D42 and D58, D90 to D93 into D70, D76 and D77,
   D94 to D99 into D48, D65 and D86 — which is what D21, D49, D58, D59 and the
@@ -2739,7 +2744,10 @@ entry.
   agrees with the demo, with D42 and with the code at the same time, while
   saying out loud the thing the demo's line leaves implicit. Counting twelve
   would be counting reason codes, not checks — three of the twelve belong to
-  one window check and two to the gates — and a reader who counted the table
+  one window check and three to the two gates (`amount_invalid`,
+  `signature_invalid`, `mandate_malformed`), leaving six checks with one code
+  each (corrected in review round 1, which read "two to the gates" and so came
+  to eleven) — and a reader who counted the table
   rows against the refusal list would find the two numbers disagreeing with no
   explanation. The docs and the demo are read side by side, so they must not
   present two counts of one function.
@@ -2773,7 +2781,8 @@ entry.
   sections, those admissions read as caveats; collected, they read as an
   assessment — and a hiring manager with ten minutes can find the whole of it
   in one scroll. The decisions' Cost paragraphs are the authority but not the
-  summary: there are 109 of them and the limits that matter are in ten. Several
+  summary: there are over a hundred of them and the limits that matter are in
+  ten. Several
   limits also belong to no single mechanism — the double-spend window is the
   policy and the ledger and the rail call together — so they have no obvious
   home anywhere else.
@@ -2814,3 +2823,65 @@ entry.
   a stale decision, because a comment sits where the code is read. The honest
   summary is that this decision is right about process and leaves a real defect
   in place; the list is the mitigation, and it is a weak one.
+
+## D116 · Amends D106: the two demo runs differ in two mandate fields, not one — PROPOSED
+
+D106 is ruled and is left as it stands. Its Decision says the two runs buy the
+same basket "under mandates that are identical except for
+`human_confirm_above_minor`: 3000 in run 1, the README's 2000 in run 2". The
+code says otherwise and the code is what ships, so the correction is recorded
+here and a pointer line was appended to D106.
+
+`scripts/demo.ts` declares both mandates as literals:
+
+```ts
+export const RUN_ONE = {
+  mandate_id: '11111111-1111-4111-8111-111111111111',
+  human_confirm_above_minor: 3000,
+} as const;
+
+export const RUN_TWO = {
+  mandate_id: '22222222-2222-4222-8222-222222222222',
+  human_confirm_above_minor: 2000,
+} as const;
+```
+
+Both ids print: run 1's audit lines name mandate `1111…` and run 2's name
+`2222…`. Everything else the two mandates carry is identical — the same
+principal, agent and merchant, the same 5000 total cap, the same 2500
+per-transaction cap, the same GBP, and the same 25-to-26 October window
+(`demoClaims` in `scripts/demo.ts`).
+
+- **Decision.** The documents say the two mandates differ in **two** fields,
+  and say which one matters: `human_confirm_above_minor` is the field that
+  decides the path, and `mandate_id` differs for reasons that have nothing to
+  do with the path. `docs/ARCHITECTURE.md` §2, `docs/SEQUENCE.md` §2 and
+  `docs/MANDATE.md` §1a all state it that way.
+- **Alternative.** Keep D106's sentence, on the grounds that the second field
+  is incidental and "differ by exactly one field" is the argument the demo is
+  making. Or make it true by giving both runs the same `mandate_id`, which is
+  a change to `scripts/` and outside this task's directories.
+- **Why.** D106's claim is load-bearing: the whole point of the demo's second
+  run is that one number a person chose decided whether software had to stop
+  and ask, and "everything else is held still" is what makes that argument.
+  A reader who checks it against `scripts/demo.ts` finds two fields differing
+  and has no way to tell which of them mattered — which costs more trust than
+  the extra clause costs to read. It is also worth being precise about *why*
+  the ids differ, because the obvious guess is wrong: it is **not** to give
+  each run its own budget. Each run calls `startMerchant()`, which builds its
+  own `createMandatePolicy(...)`, so each run already has a separate spend
+  ledger and a separate audit log; two runs under one `mandate_id` would still
+  both have the full 5000 cap. The ids are literals rather than
+  `randomUUID()` because the output has to be byte-identical between
+  invocations (D103), and they are *different* literals so that each run's
+  audit lines name their own authority rather than appearing to continue the
+  previous run's.
+- **Cost.** A longer sentence in three documents where D106 had a short one,
+  and a reader now has to hold the distinction between the field that decides
+  the path and the field that is bookkeeping. D106 and D116 also now say
+  different things about the same two objects, which is one more amendment
+  chain in a file that already has eight — the cost D110 accepted when it chose
+  an index over a consolidation. The alternative worth noting: if `scripts/`
+  is ever touched again, giving both runs one `mandate_id` would make D106
+  true as written and delete this entry, at the price of an audit log whose
+  two runs are harder to tell apart.
