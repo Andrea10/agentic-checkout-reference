@@ -1,18 +1,28 @@
 /**
  * The `place_order` step, against the real merchant tool.
  *
- * T07a shipped `merchant/place-order.ts`, so this suite drives the agent's
- * order step against the tool it will meet in the demo: the real policy
- * check, the real order store, the real refusal envelope. The merchant runs
- * with a frozen clock and sequential ids (`harness.ts`), so an order is
- * `order_000001` and a decision is the same on any day.
+ * T07a shipped `merchant/place-order.ts` and T07b the payment behind it, so
+ * this suite drives the agent's order step against the tool it will meet in
+ * the demo: the real policy check, the real order store, the real stub rail,
+ * the real refusal envelope. The merchant runs with a frozen clock and
+ * sequential ids (`harness.ts`), so an order is `order_000001` and a decision
+ * is the same on any day.
+ *
+ * Two words are easy to confuse below, and the distinction is the whole point
+ * of D77's narrow reader. `approved` is the **agent's** name for the outcome
+ * "the merchant completed the order" — `APPROVED` in `agent/order.ts`, and
+ * `ordered` once `runPlan` has folded it in. `paid` is the **merchant's** own
+ * status word for what it did, read off the body and carried through unread
+ * (D88). Until T07b the two were the same string, which is why several
+ * assertions here had to be split.
  *
  * The three answers get a group each, and
  * `the exact combination the merchant ships` at the end pins all three side
  * by side in one assertion, so the shape of the whole contract is readable in
  * one place:
  *
- * - **approved** — status `approved`, an `order_id`, and no token (D62).
+ * - **approved** — the agent's outcome, carrying a body whose own status is
+ *   `paid`, an `order_id`, and no token (D62, D88).
  * - **awaiting_confirmation** — status `awaiting_confirmation`, an
  *   `order_id` *and* a `confirmation_token`. The agent stops (D74).
  * - **mandate_refused** — `isError`, code `mandate_refused`, and
@@ -112,12 +122,16 @@ describe('approved: the mandate covered it (D62)', () => {
 
     const outcome = await placeOrder(connection, permissive(), quote_id);
 
+    // `status: APPROVED` at the top is the agent's outcome; `order.status` is
+    // the merchant's word for what it did, which since T07b is `paid` — the
+    // rail was charged inside the one call (D88). The agent reports the
+    // merchant's word rather than its own, which is why the two differ here.
     expect(outcome).toEqual({
-      status: 'approved',
+      status: APPROVED,
       order: {
         order_id: 'order_000001',
-        status: APPROVED,
-        body: { order_id: 'order_000001', status: 'approved' },
+        status: 'paid',
+        body: { order_id: 'order_000001', status: 'paid' },
       },
     });
   });
@@ -153,7 +167,8 @@ describe('approved: the mandate covered it (D62)', () => {
     expect(result.outcome).toMatchObject({ kind: 'ordered' });
     if (result.outcome.kind !== 'ordered') return;
     expect(result.outcome.order.order_id).toBe('order_000001');
-    expect(result.outcome.order.status).toBe(APPROVED);
+    // The merchant's word, not the agent's: `ordered` above, `paid` here.
+    expect(result.outcome.order.status).toBe('paid');
   });
 });
 
@@ -182,11 +197,15 @@ describe('awaiting_confirmation: the agent stops (D74)', () => {
     });
 
     expect(result.outcome.kind).toBe('awaiting_confirmation');
-    // The merchant has no confirm_order on main, and the agent did not reach
-    // for one: place_order is the last step, and it was taken once.
+    // The claim got stronger when T07b shipped `confirm_order`. The tool is
+    // right there on the connection the agent is holding, and the agent still
+    // does not touch it: `place_order` is the last step and it was taken once,
+    // so the run ended by handing the token back (D74). Before T07b this test
+    // could only show that the agent did not call a tool that did not exist.
     expect(result.steps.at(-1)?.kind).toBe('place_order');
     expect(result.steps.filter((step) => step.kind === 'place_order')).toHaveLength(1);
-    expect(await connection.listToolNames()).not.toContain('confirm_order');
+    expect(await connection.listToolNames()).toContain('confirm_order');
+    expect(result.steps.map((step) => step.kind)).not.toContain('confirm_order');
   });
 
   it('leaves the order held, not approved, in the merchant’s own store', async () => {
@@ -371,7 +390,7 @@ describe('the exact combination the merchant ships', () => {
     ).toEqual([
       {
         status: 'approved',
-        body: { status: 'approved', order_id: 'order_000001' },
+        body: { status: 'paid', order_id: 'order_000001' },
       },
       {
         status: 'awaiting_confirmation',
@@ -392,8 +411,16 @@ describe('the exact combination the merchant ships', () => {
 
 describe('bodies the shipped merchant never sends', () => {
   it('carries through an approved order whose status word is not "approved"', async () => {
-    // T07b's paid path. The agent must not reject a word it was not compiled
-    // against; `approvedSchema` reads `status` as a string for this reason.
+    // Half of what this test used to prove has shipped: `paid` is now exactly
+    // what the real merchant answers on the direct path (D88), and
+    // `the exact combination the merchant ships` above pins it against the
+    // real tool. What is still the stub's alone is the rest of this body —
+    // `paid_at` is a field the shipped merchant does not send, because an
+    // order carries the rail's own timestamps and no merchant one (D80). So
+    // the claim narrows rather than disappears: a status word the agent has no
+    // literal for, *and* an unknown field beside it, both travel through
+    // unread. `approvedSchema` reads `status` as a plain string and ignores
+    // what it does not know for this reason (D77, D90).
     const { connection } = await stubAnswering({
       body: { status: 'paid', order_id: 'order_future', paid_at: '2026-10-28T09:00:00.000Z' },
     });

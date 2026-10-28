@@ -19,25 +19,37 @@
  *    now.
  * 5. **Does the mandate authorise it?** `checkMandate()` last, so that the
  *    audit log records a decision the merchant actually acted on (D65).
+ * 6. **Pay.** An order the mandate covers goes straight to the rail —
+ *    authorise, capture, then `recordSpend()` — and comes back `paid` (D88).
+ *    An order above the threshold is held instead, and `confirm_order` does
+ *    that same payment step when a human presents the token.
  *
- * What this tool does *not* do is pay. An approved order is approved, not
- * paid: the rail call and `recordSpend()` belong to `confirm_order` and the
- * paid path in T07b. Nothing here consumes mandate budget, which is why a
- * refused order leaves the ledger exactly as it was (D45).
+ * Nothing before step 6 consumes mandate budget, which is why a refused order
+ * and a declined payment both leave the ledger exactly as it was (D45).
  */
 
 import * as z from 'zod';
 
 import { checkMandate } from '../mandate/index.js';
 
-import { findProduct, type Product } from './catalogue.js';
 import { MandateRefusedError, MerchantError } from './errors.js';
 import { mandateWireSchema } from './mandate-wire.js';
-import { ORDER_STATUSES, type OrderFacts, type OrderLine } from './order.js';
+import { type OrderFacts, type OrderLine } from './order.js';
+import { settle } from './pay.js';
 import { totalOf, type Quote } from './quote.js';
+import { assertStockAvailable } from './stock.js';
 
 import type { Mandate } from '../mandate/index.js';
 import type { MerchantState } from './tools.js';
+
+/**
+ * The two statuses `place_order` can answer with.
+ *
+ * `approved` is not among them: it is a state an order passes through while
+ * the rail is being called, and never a body the merchant sends (D88). The
+ * stored statuses are {@link ORDER_STATUSES} in `order.ts`.
+ */
+export const PLACE_ORDER_STATUSES = ['paid', 'awaiting_confirmation'] as const;
 
 export const placeOrderInput = z.object({
   quote_id: z
@@ -64,9 +76,9 @@ export const placeOrderInput = z.object({
  */
 export const placeOrderOutput = z.object({
   status: z
-    .enum(ORDER_STATUSES)
+    .enum(PLACE_ORDER_STATUSES)
     .describe(
-      'approved: the mandate covered it and the order will be paid by confirm_order. awaiting_confirmation: the amount is above the mandate’s human-confirm threshold and a human must present the token.',
+      'paid: the mandate covered it and the rail has taken the money. awaiting_confirmation: the amount is above the mandate’s human-confirm threshold, so the order is held and a human must present the token to confirm_order.',
     ),
   order_id: z.string().describe('The order placed.'),
   confirmation_token: z
@@ -96,11 +108,15 @@ export type PlaceOrderResult = z.infer<typeof placeOrderOutput>;
  * Places an order against a quote, under a mandate.
  *
  * @throws MerchantError for anything wrong with the merchant, the quote or the
- * stock, and {@link MandateRefusedError} — which is a `MerchantError` carrying
+ * stock, {@link MandateRefusedError} — which is a `MerchantError` carrying
  * every failed policy check — when the mandate does not authorise the
- * purchase.
+ * purchase, and the rail errors from `pay.ts` when the payment does not go
+ * through.
  */
-export function placeOrder(state: MerchantState, args: PlaceOrderArgs): PlaceOrderResult {
+export async function placeOrder(
+  state: MerchantState,
+  args: PlaceOrderArgs,
+): Promise<PlaceOrderResult> {
   const { policy } = state;
   if (policy === undefined) {
     throw new MerchantError(
@@ -111,7 +127,7 @@ export function placeOrder(state: MerchantState, args: PlaceOrderArgs): PlaceOrd
 
   const quote = state.quotes.current(args.quote_id);
   state.orders.assertQuoteUnused(quote.id);
-  assertStockAvailable(state.catalogue, quote);
+  assertStockAvailable(state.catalogue, stockLinesOf(quote), 'the quote was made');
 
   const facts: OrderFacts = {
     quote_id: quote.id,
@@ -138,10 +154,10 @@ export function placeOrder(state: MerchantState, args: PlaceOrderArgs): PlaceOrd
   }
 
   if (decision.outcome === 'confirm_required') {
-    const held = state.orders.holdForConfirmation(
-      facts,
-      decision.human_confirm_above_minor,
-    );
+    const held = state.orders.holdForConfirmation(facts, {
+      human_confirm_above_minor: decision.human_confirm_above_minor,
+      mandate: args.mandate,
+    });
     return {
       status: held.status,
       order_id: held.order_id,
@@ -150,42 +166,15 @@ export function placeOrder(state: MerchantState, args: PlaceOrderArgs): PlaceOrd
   }
 
   const approved = state.orders.approve(facts);
-  return { status: 'approved', order_id: approved.order_id };
+  return settle({ rail: state.rail, orders: state.orders, policy }, approved);
 }
 
-/**
- * Re-checks every line against the catalogue as it is now.
- *
- * D17 decided that stock is checked and never reserved, and named this as the
- * consequence: a cart can pass the check in `add_to_cart` and still be
- * unfulfillable by the time the order is placed. Every short line is named in
- * one refusal, for the same reason the policy reports every failed check at
- * once (D42): the agent can act on the whole answer.
- */
-function assertStockAvailable(catalogue: readonly Product[], quote: Quote): void {
-  const short: string[] = [];
-
-  for (const line of quote.line_items) {
-    const product = findProduct(catalogue, line.product_id);
-    if (product === undefined) {
-      throw new MerchantError(
-        'product_not_found',
-        `the quote names ${line.product_id}, which is no longer in the catalogue`,
-      );
-    }
-    if (product.stock < line.quantity) {
-      short.push(
-        `${line.product_id} (${String(product.stock)} left, ${String(line.quantity)} ordered)`,
-      );
-    }
-  }
-
-  if (short.length > 0) {
-    throw new MerchantError(
-      'insufficient_stock',
-      `stock has gone since the quote was made: ${short.join('; ')}`,
-    );
-  }
+/** What the stock check needs from a quote: a product and a quantity. */
+function stockLinesOf(quote: Quote): { product_id: string; quantity: number }[] {
+  return quote.line_items.map((line) => ({
+    product_id: line.product_id,
+    quantity: line.quantity,
+  }));
 }
 
 /** The quote's lines, in the merchant's internal vocabulary. */

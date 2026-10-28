@@ -1795,3 +1795,359 @@ positional-to-options migration when every field is optional.
   worth keeping: when an options object is entirely optional, the test that
   proves the options arrived has to assert on their **effect** — a named id —
   and never on the shape of the call.
+
+---
+
+## T07b · Merchant confirm_order and rail call
+
+D80 to D89 are T07b's. All are **PROPOSED**: Andrea has not ruled on them.
+
+This section sits *after* D90 to D93 because the file is ordered by task and
+not by number: T08's round-2 addendum took the next free numbers while T07b
+was in review, and this range was allotted before it. The file already orders
+ranges this way — T04's D58 and D59 sit before T05's D50 to D57 for the same
+reason — and it is append-only, so the alternative was editing above.
+
+T07a stopped at the authorisation decision: `place_order` returned `approved`
+and neither the rail nor `recordSpend()` was called. This task closes that
+gap, which means it owns three things T07a left open — what the states of an
+order actually are, what `confirm_order` has to re-check after a human has
+been thinking for ten minutes, and what the merchant does with each of the
+four ways a payment can fail. Two of those four are not failures the rail's
+own tests could show, because `StubRail` deliberately never pretends to be a
+bank (D55).
+
+## D80 · Five order states, and a store that refuses any other transition — PROPOSED
+
+- **Decision.** An order is `approved`, `awaiting_confirmation`, `authorised`,
+  `paid` or `declined`. Six transitions exist: `approved` and
+  `awaiting_confirmation` each go to `authorised` or `declined`, `authorised`
+  goes to `paid`, and a refused capture leaves `authorised` where it is. Every
+  other pairing of a state and a transition throws a plain `Error` —
+  `internal_error` on the wire — rather than being quietly allowed. `paid` and
+  `declined` are terminal. The transitions are a table in
+  `test/merchant/order.test.ts`: six legal rows asserted, and the whole 5 × 4
+  matrix walked so that each of the fourteen illegal pairs is asserted to
+  throw. An order's payment steps carry no merchant timestamp: the rail stamps
+  its own `authorised_at` and `captured_at`, and a second clock's opinion of
+  the same event is a field that can disagree with itself.
+- **Alternative.** Three states — held, paid, failed — with the rail's
+  answers kept in a separate payment record. Or a free `status` field with no
+  guard, since one function (`settle()`) does all the writing and could be
+  trusted to write only sensible values. Or an `expired` state for a lapsed
+  hold, swept by a timer.
+- **Why.** `authorised` is the state the repo exists to make visible. A
+  merchant that authorised and could not capture is holding somebody's money
+  without having sold them anything, and a model with only "paid" and "failed"
+  has to file that under one of the two, both of which are lies. The word is
+  D62's own: `approved` is what the merchant decided, `authorised` is what the
+  rail did to money. The guard is there because the illegal transitions are
+  precisely the bugs that cost money — capturing a declined order, paying a
+  held order twice — and a test that walks the whole matrix is the only kind
+  that still fails when somebody adds a sixth state and forgets a branch. A
+  lapsed hold is computed on read rather than stored, exactly as an expired
+  quote is (D38, D39): no sweeper, no timer, and the refusal can name the
+  window the order had.
+- **Cost.** Five words a reader has to hold, two of which (`approved`,
+  `authorised`) are one letter apart in meaning if you skim. `approved` is
+  also nearly invisible: on the direct path the order passes through it inside
+  a single call, so only a test with a paused rail can observe it — there is
+  such a test, which is the only reason the state is worth persisting at all.
+  And the matrix test has to be kept honest by hand: adding a state without
+  adding its rows leaves the new state untested rather than failing.
+
+## D81 · A refused capture leaves the order `authorised`, with its own error code — PROPOSED
+
+- **Decision.** `authorise` declined marks the order `declined` and refuses
+  with `payment_declined`; nothing was held. `capture` declined leaves the
+  order `authorised`, writes the decline onto it as `capture_decline`, and
+  refuses with a *different* code, `capture_failed`, whose message says the
+  authorisation is outstanding.
+- **Alternative.** One code, `payment_declined`, for both, with the rail call
+  named in the message. Or marking the order `declined` after a failed
+  capture, on the grounds that the purchase did not happen either way.
+- **Why.** The two outcomes differ in the only way that matters to the person
+  whose card it is. After a declined authorisation there is nothing
+  outstanding and the agent can re-quote and try again. After a declined
+  capture the rail is holding funds that this interface cannot release — there
+  is no cancel and no refund by the PRD, and a real card authorisation sits
+  for about seven days (D57's cost) — so somebody has to reconcile it by hand.
+  An agent that saw one code for both would retry the second case and
+  double-authorise. Calling it `declined` would be worse still: it would erase
+  the outstanding hold from the merchant's own record.
+- **Cost.** A state that needs a human and has no tool to help them: nothing
+  in the repo lists stuck orders, and `state.orders.orders()` is the only way
+  to find one. The agent is told the hold exists and can do nothing about it.
+  Stage 2 wants a cancel on the rail interface — which is an addition D51's
+  request objects make cheap — and T12 or a later task wants a reconciliation
+  path. Said here rather than left for a reader to discover.
+
+## D82 · A hold lasts fifteen minutes, and the quote behind it is never re-read — PROPOSED
+
+- **Decision.** `holdForConfirmation` stamps the order with
+  `expires_at = placed_at + HELD_ORDER_TTL_SECONDS` (900, the same window a
+  quote gets), and `confirm_order` refuses a lapsed hold with `order_expired`,
+  naming the instant it ran out. The quote is not consulted at confirmation:
+  not its expiry, not its cart, not its price. The order carries its own
+  priced snapshot — the lines, the amount, the currency — and that snapshot is
+  what the human is being asked about.
+- **Alternative.** No expiry at all, which is what T07a shipped and what D63's
+  cost asked a later task to fix. Or tie the hold to the quote's own
+  `expires_at`, so the two windows end together. Or tie it to the mandate's
+  `valid_until`, so a hold can never outlive the authority behind it.
+- **Why.** A token with no expiry is a capability that never dies, which is
+  the wrong shape for the one value in this repo that can move money on its
+  own. Fifteen minutes because it is the number already in the system (D38)
+  and a reader should meet one duration rather than two. The quote is left out
+  because re-reading it would break the common case for no gain: a quote
+  issued ten minutes before the order would leave the human five minutes to
+  answer, and a cart the agent touched afterwards would cancel a purchase a
+  person had already agreed to. The *price* cannot drift, because the order
+  stored it. What can drift is the stock and the mandate, and those are
+  re-checked (D83).
+- **Cost.** A fourth duration-shaped thing in the repo after the quote TTL,
+  the mandate window and the rail's notional authorisation life, and the hold
+  can outlive the quote it came from — so a reader comparing `expires_at` on
+  an order with `expires_at` on its quote will find two different instants and
+  have to be told why. A hold can also still outlive the mandate's window,
+  which is caught at confirmation by the policy rather than by the hold's own
+  clock: the refusal then reads `mandate_expired`, not `order_expired`, which
+  is the more accurate of the two. And there is still no way to cancel a hold:
+  it lapses or it is confirmed.
+
+## D83 · `confirm_order` re-runs the whole mandate check, against the mandate it stored — PROPOSED
+
+- **Decision.** A held order keeps the `Mandate` it was placed under, and
+  `confirm_order` calls `checkMandate()` again with it, against the clock and
+  the spend ledger as they are at confirmation time. A `refuse` outcome is a
+  refusal; `confirm_required` is *not* — being above the threshold is the
+  reason the token exists, so treating it as a refusal would make every held
+  order unconfirmable.
+- **Alternative.** Trust the check made at the hold, and re-verify nothing: the
+  mandate was good when the order was taken and a human has now said yes.
+  Or re-check only the window and the budget, skipping the signature. Or take
+  the mandate as a second argument to `confirm_order`, so the merchant need
+  not store a credential.
+- **Why.** The hold is exactly the window in which the facts the mandate
+  depends on go stale. Two of them bite in practice: the mandate's own
+  `valid_until` can pass while a human is deciding, and another order under
+  the same mandate can eat the budget in between — which is D45's named gap,
+  reachable here without any concurrency at all, because the direct path pays
+  immediately. Both have a test. The signature half of the re-check cannot
+  fail, since this is the merchant's own stored copy that no caller has
+  touched, and it is re-run anyway because `checkMandate()` is one call and
+  splitting it to skip a cheap check would be the kind of cleverness that
+  later turns out to have skipped the wrong one. Storing the mandate rather
+  than asking for it again keeps the input at one argument, which is what lets
+  the *principal* confirm: the person is not the agent (D61, D74) and may never
+  have held the mandate at all.
+- **Cost.** **The merchant now holds a credential in memory for up to fifteen
+  minutes**, and D69's process-level isolation is all that bounds it: anything
+  in the server process can read a held order's mandate. That is a real
+  widening of what the merchant keeps, and it is the entry here most worth
+  arguing about — the alternative is passing the mandate back on
+  `confirm_order`, which moves the credential onto the wire a second time and
+  hands the confirming party a job that is not theirs. The re-check also means
+  two audit entries for one purchase (D65 stays as ruled), and a held order can
+  now be refused at confirmation for a reason that did not exist when the human
+  was asked, which is correct and still reads as the merchant changing its mind.
+
+## D84 · The token is spent by the attempt that reaches the rail — PROPOSED
+
+- **Decision.** A confirmation token releases one payment *attempt*. A
+  confirmation that gets as far as `settle()` moves the order out of
+  `awaiting_confirmation`, and the same token afterwards is refused:
+  `order_already_paid` when it went through, `order_not_awaiting_confirmation`
+  when the rail declined or the order is stuck `authorised`. A confirmation
+  refused *before* the rail — unknown token, lapsed hold, stock gone, mandate
+  refused — changes nothing, so the token stays live and the human's yes still
+  counts. The token index is kept rather than deleted, so a second attempt is
+  told what happened to its order instead of being told the token is unknown.
+- **Alternative.** Delete the token on first use, so every second attempt reads
+  `confirmation_token_unknown`. Or treat only a *successful* payment as
+  spending it, so a declined card could be retried with the same token.
+- **Why.** "Spent at the rail" is the line that cannot be crossed twice: it is
+  what stops a second confirmation double-authorising, which is a real hazard
+  because `order_ref` is not an idempotency key (D56) and the rail would
+  cheerfully grant a second hold. Before the rail, nothing has happened, so
+  refusing the token as well would punish the human for the merchant's stock
+  going — the reasoning D64 gives for leaving a quote free after a refused
+  order, one level up. Keeping the index follows D39: the refusal should say
+  what happened, not that the id is unknown. Two codes rather than one because
+  "already paid" is benign news an agent should not treat as a failure, and
+  prose in a message is not something a client should have to parse (D66).
+- **Cost.** A declined card ends the order: the token will not send it again,
+  so the agent has to re-quote and the human has to be asked a second time.
+  That is deliberate — a retry loop on a held order is an agent spending
+  against a decision a person made once — but it is friction a real checkout
+  would not accept, and a `retry_order` tool with its own rules is the honest
+  fix rather than loosening this. The two codes also split a case a client may
+  not care about, so a client that only wants "not confirmable" has to match
+  two.
+
+## D85 · A rail that throws is `rail_unavailable`, and its message does not travel — PROPOSED
+
+- **Decision.** An exception out of `authorise` or `capture` becomes
+  `RailUnavailableError`, code `rail_unavailable`, with a fixed message saying
+  the payment state is unknown and nothing has been recorded as paid. The
+  order keeps the state it was in — `awaiting_confirmation` or `approved` if
+  `authorise` threw, `authorised` if `capture` did — nothing is written to the
+  spend ledger, and the thrown error is kept as `cause` rather than put on the
+  wire. There is no `decline` field on the body, because nothing was declined.
+- **Alternative.** Mark the order `declined`, which is what a `catch` that
+  treats every failure alike would do. Or invent a sixth state,
+  `payment_unknown`, for exactly this. Or pass the rail's own message through,
+  as every other `MerchantError` does.
+- **Why.** D50 made this argument at the rail's own seam and it transfers
+  unchanged: a timeout is not a decline, because the payment may have gone
+  through, and code that records one as the other books a successful charge as
+  a refused card. The order therefore keeps the last thing that was actually
+  *known* about it, and a status word is never written on a guess — which is
+  why no sixth state was added: `payment_unknown` would be a state word
+  recording the absence of information, and `authorised` after a failed
+  capture already says the true thing. The message is the one exception to
+  passing a refusal through verbatim, because a real rail's internal errors
+  carry hosts, URLs, request bodies and sometimes credentials, and this body
+  goes to the agent.
+- **Cost.** The direct path can now leave an order `approved` forever: there
+  is no token to retry with, no `get_order` to read it back (D62's cost asked
+  for one), and the quote is used up (D64), so that purchase cannot be
+  completed or retried at all — the agent must re-quote the cart. A retry
+  after a throw would also double-authorise, and nothing in the repo stops it
+  (D56's cost). Swallowing the rail's message also means a developer debugging
+  a broken rail has to read the server's own output rather than the tool
+  result; the `cause` is there for them.
+
+## D86 · The decline rides on the error body; the audit log is left alone — PROPOSED
+
+- **Decision.** `MerchantErrorBody` gains one more conditional field,
+  `decline: { code, message, origin }`, present on `payment_declined` and
+  `capture_failed` only, carrying the rail's own `RailDecline` unchanged
+  (D53). Everything else about D13 is unchanged: `isError: true`, one text
+  block, no `structuredContent`. The audit log is **not** widened: a rail
+  failure leaves no audit entry, and the only entries a payment produces are
+  the policy checks that preceded it.
+- **Alternative.** Flatten the decline into the message, as a sentence. Or one
+  merchant error code per decline code, which would need eight more entries in
+  `MerchantErrorCode`. Or take up D48's and D65's invitation and add an entry
+  kind to `AuditEntry`, so a settlement appears in the audit log beside the
+  check that allowed it.
+- **Why.** `origin` is the field a product reader should see named — an issuer
+  refusing a cardholder's money is a different event from the payment system
+  rejecting a request — and it cannot survive being folded into prose. Passing
+  the rail's object through unchanged is the same choice D66 made for the
+  policy's reasons, for the same reason: the vocabulary of *why the money did
+  not move* belongs to the rail. The audit log is left alone for a blunter
+  reason than principle: widening `AuditEntry` means changing `mandate/`,
+  which is **not among the directories T07b may touch**, so the choice here is
+  between not doing it and doing it out of scope. D48 and D65 are both ruled
+  and both read the right way as they stand — the log records decisions, and a
+  settlement is a different kind of event.
+- **Cost.** The error body now has two fields that appear on some codes only,
+  so a client reading either unconditionally gets `undefined` most of the
+  time — D66's cost, doubled. And an auditor needs **three** sources to see one
+  purchase through: the audit log for the decisions, the rail's own log for
+  what the rail did, and the spend ledger for what was actually taken. A
+  declined payment appears in two of the three and leaves the audit log
+  reading `confirm_required, confirm_required` with no hint that the card was
+  refused. **If Andrea wants the settlement in the audit log, this is the entry
+  to overrule** — the change is D48's widening, it belongs to T10 or to a task
+  whose directories include `mandate/`, and a test here already pins the
+  present behaviour so the change would be visible.
+
+## D87 · The ledger records the amount the rail took — PROPOSED
+
+- **Decision.** `recordSpend()` is called with the `amount_minor` off the
+  `Capture` the rail returned, not with the amount the policy checked and not
+  with the order's stored total. It is called after the order is marked `paid`.
+- **Alternative.** `recordSpend(policy, decision)`, which is the call D45 names
+  as the usual one and which uses the amount the check was made against. Or
+  the order's own `amount_minor`.
+- **Why.** The three figures are one number by construction — the authorise
+  request is built from the order and a capture settles it in full (D52) — and
+  that is exactly why the captured one is the right source: D51's cost names
+  the hazard that nothing in the type system ties the amount checked to the
+  amount authorised, and a ledger fed from the far end of the sequence closes
+  the loop rather than restating the near end. A budget is a record of money
+  that left, so it should be written from the thing that reports money
+  leaving. Two tests pin the three figures together, on both paths.
+- **Cost.** A divergence from D45's stated call shape, which means a reader
+  following D45 to this code finds a different argument than the one it names.
+  If the three figures ever *did* disagree, this choice would leave a correct
+  ledger behind an incorrect authorisation rather than failing loudly — there
+  is no assertion that they match, because a defensive check here would be
+  dead code with a dead test attached (D68's reasoning). The order of the last
+  two steps is also a choice with a losing side: marking `paid` first means a
+  throw out of `recordSpend` would leave a paid order with budget unconsumed,
+  and the reverse would leave a consumed budget on an order that does not read
+  `paid`. The money has moved by then, so the order's own record goes first.
+
+## D88 · `place_order` pays on the direct path, and `approved` leaves the wire — PROPOSED
+
+- **Decision.** An order the mandate covers outright is authorised, captured
+  and recorded inside the one `place_order` call, which answers
+  `{ status: 'paid', order_id }`. `approved` is no longer a body the merchant
+  sends; it survives only as a stored state (D80). `place_order`'s advertised
+  `status` enum is therefore `['paid', 'awaiting_confirmation']`, and
+  `confirm_order` advertises the literal `'paid'`. Both bodies stay at the two
+  fields D62 settled, and both tools go through one `settle()` in
+  `merchant/pay.ts`. The functions are now `async`, and `server.ts` has one
+  `run()` wrapper that awaits a handler which may or may not be synchronous.
+- **Alternative.** Keep `approved` on the wire and make paying a second call —
+  `confirm_order` for everything, or a new `pay_order` — so that every order
+  is placed and then paid. Or two statuses on the direct path, `approved` when
+  the rail is slow and `paid` when it is not.
+- **Why.** The PRD's own sequence diagram ends `M-->>A: paid` on both paths,
+  and an agent that had to call a second tool to finish a purchase the mandate
+  already authorised would be carrying a step that exists for no one's benefit:
+  there is nobody to ask, which is the whole difference between this path and
+  the held one. One `settle()` for both because the sequence — authorise,
+  capture, record, in that order and no other — is the part of this repository
+  where a mistake costs money, and there should be exactly one copy of it to
+  read and one set of tests against it.
+- **Cost.** **This is a wire change.** `place_order` answered `approved` on
+  main and answers `paid` now, so anything written against the T07a body has
+  to read the new word. T08's buyer agent was the one caller, and what it cost
+  is worth recording because it is the measure of whether D76's seam and D77's
+  narrow reader were worth their price: **no production code in `agent/`
+  changed at all.** `approvedSchema` already read `status` as a plain string —
+  D90 put it that way for exactly this path — and `run.ts` switches on the
+  agent's own outcome word, so a `paid` body arrives as an `ordered` run with
+  nothing recompiled. Six assertions in `test/agent/` were claims about the
+  merchant rather than about the agent, and those did have to move: the
+  six-tool list, a test that relied on `confirm_order` being absent, and four
+  bodies reading `status: 'approved'`. The agent's behaviour is unchanged: it
+  carries the success status through and still stops on
+  `awaiting_confirmation` without confirming (D74). `place_order` is also no
+  longer a cheap call: it waits for a payment rail, so a slow rail is a slow
+  tool call, and there is no progress reporting. And an order that fails at the
+  rail now takes its quote with it (D64 frees a quote only for a *refused*
+  order), so a declined card means re-quoting the cart.
+
+## D89 · The rail is configuration, and never absent — PROPOSED
+
+- **Decision.** `MerchantState.rail` is a required `Rail`, defaulted by
+  `createMerchantState()` to `new StubRail()` with every stub default:
+  sequential authorisation ids, the stepping clock from `STUB_RAIL_EPOCH`, and
+  a log that writes nowhere. A caller that wants a transcript or Stage 2's
+  Stripe rail passes one in. `merchant/stdio.ts` passes none, so a spawned
+  merchant pays through a silent deterministic stub.
+- **Alternative.** Make `rail` optional like `policy`, so a merchant with no
+  rail serves its catalogue and refuses to pay, with a
+  `merchant_misconfigured`-shaped refusal. Or read it from the environment as
+  D60 reads the merchant id and the issuer key.
+- **Why.** The two pieces of configuration are not alike. A merchant with no
+  trusted issuer has something useful left to do — T08 browses a merchant it
+  cannot buy from (D60) — whereas a merchant with no rail has no degraded mode
+  to offer, so an optional field would buy one more `undefined` check at every
+  call site and nothing else. The default is a stub rather than nothing because
+  Stage 1 *is* the stub (PRD R9) and a reference implementation should run from
+  a fresh clone with no configuration at all. Silence is the only safe default
+  for the log, since the merchant's stdout is a protocol channel (D54), and T09
+  is the place to pass `writeTo(process.stderr)` for the demo.
+- **Cost.** Every construction of a merchant state now carries a rail whether
+  the test cares or not, and the default one keeps authorisations in a process
+  `Map` that is never evicted (D57's cost, one level up). A merchant started
+  from `stdio.ts` also records nothing about its payments anywhere, which looks
+  broken until you read this entry or D54 — the demo is where that gets fixed,
+  and T09 has to remember to.

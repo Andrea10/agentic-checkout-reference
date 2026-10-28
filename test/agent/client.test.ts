@@ -41,7 +41,7 @@ describe('connecting in process', () => {
     await merchant.close();
   });
 
-  it('lists all six tool names, sorted', async () => {
+  it('lists all seven tool names, sorted', async () => {
     const merchant = await connectInMemory(createMerchantServer());
 
     expect(await merchant.listToolNames()).toEqual(MERCHANT_TOOL_NAMES);
@@ -92,12 +92,14 @@ describe('callTool', () => {
   });
 
   it('throws for a tool the merchant does not have (D73)', async () => {
-    // `place_order` used to stand in here, before T07a shipped it.
-    // `confirm_order` is T07b's and is genuinely not on main yet, which is
-    // the condition this test is about: a missing tool is not a refusal.
+    // Two tools have stood here and then shipped: `place_order` in T07a and
+    // `confirm_order` in T07b. The name below is deliberately not a tool any
+    // merchant in this repo would grow — there is no cancel and no refund in
+    // the rail interface by the PRD — so the condition this test is about
+    // stays true: a missing tool is a broken call, not a refusal.
     const merchant = await connectInMemory(createMerchantServer());
 
-    await expect(merchant.callTool('confirm_order', {})).rejects.toThrow(/confirm_order/);
+    await expect(merchant.callTool('refund_order', {})).rejects.toThrow(/refund_order/);
     await merchant.close();
   });
 

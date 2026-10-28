@@ -32,7 +32,7 @@ const MODERN_REVISION = '2026-07-28';
 /** The revision `serveStdio` serves to a 2025-era opening (T06a's tests). */
 const LEGACY_REVISION = '2025-11-25';
 
-/** The six tools the merchant advertises on main, including T07a's `place_order`. */
+/** The seven tools on main, including T07a's `place_order` and T07b's `confirm_order`. */
 const TOOL_NAMES = MERCHANT_TOOL_NAMES;
 
 describe('the v2 client opening a connection to merchant/stdio.ts', () => {

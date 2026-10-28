@@ -12,9 +12,13 @@
  * **answer with a body the merchant on main never sends.** Two of those
  * matter to the agent:
  *
- * - an approved order whose status word is not `approved` — T07b's paid path,
- *   which the agent must carry through rather than reject (see
- *   `agent/order.ts`'s `approvedSchema`);
+ * - an approved order carrying a status word the agent has no literal for and
+ *   an unknown field beside it, both of which must travel through rather than
+ *   be rejected (see `agent/order.ts`'s `approvedSchema`). T07b narrowed this
+ *   one: `paid` itself is now what the real merchant answers on the direct
+ *   path (D88) and `order.test.ts` pins it against the real tool, so what is
+ *   left to the stub is the *undocumented* part of that body — the shipped
+ *   merchant sends two fields and no timestamp of its own (D80);
  * - a success body that is neither of the two documented shapes, which must
  *   throw rather than become a refusal (D73).
  *

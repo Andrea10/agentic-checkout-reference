@@ -57,9 +57,17 @@ const TSX_CLI = fileURLToPath(new URL('../../node_modules/tsx/dist/cli.mjs', imp
  */
 export const MERCHANT_NOW = '2026-10-28T09:00:00.000Z';
 
-/** The six tools the merchant advertises on main, sorted. */
+/**
+ * The seven tools the merchant advertises on main, sorted.
+ *
+ * `confirm_order` arrived with T07b, which also made `place_order` pay
+ * outright on the direct path (D88). The agent calls neither: it stops on
+ * `awaiting_confirmation` and hands the token back to whoever started it
+ * (D74), so this list is the merchant's surface and not the agent's reach.
+ */
 export const MERCHANT_TOOL_NAMES = [
   'add_to_cart',
+  'confirm_order',
   'create_cart',
   'get_product',
   'get_quote',
