@@ -28,7 +28,7 @@ export type PolicyRefusalReason =
   /** The signature does not match the claims, or the mandate is unreadable. */
   | VerifyFailureReason
   /** The amount asked for is not a whole number of minor units above zero. */
-  | 'amount_not_integer_minor_units'
+  | 'amount_invalid'
   /** The mandate was granted to a different agent. */
   | 'agent_mismatch'
   /** The mandate is good at a different merchant. */

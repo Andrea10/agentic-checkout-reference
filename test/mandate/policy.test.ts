@@ -149,7 +149,7 @@ describe('checkMandate, the amount has to be a whole number of minor units above
     const decision = check({ amount_minor: amount });
 
     expect(decision.outcome).toBe('refuse');
-    expect(reasons(decision)).toEqual(['amount_not_integer_minor_units']);
+    expect(reasons(decision)).toEqual(['amount_invalid']);
   });
 
   it('says so in words a person can read', () => {
@@ -164,14 +164,14 @@ describe('checkMandate, the amount has to be a whole number of minor units above
     const decision = check({ amount_minor: 0 });
 
     expect(decision.outcome).toBe('refuse');
-    expect(reasons(decision)).toEqual(['amount_not_integer_minor_units']);
+    expect(reasons(decision)).toEqual(['amount_invalid']);
     expect(decision.outcome === 'refuse' && decision.refusals[0]?.message).toContain('above zero');
   });
 
   it('checks the amount before anything else, so a bad amount is the only reason', () => {
     const decision = check({ amount_minor: 1500.5, agent: 'agent-rogue', currency: 'USD' });
 
-    expect(reasons(decision)).toEqual(['amount_not_integer_minor_units']);
+    expect(reasons(decision)).toEqual(['amount_invalid']);
   });
 });
 
@@ -205,7 +205,7 @@ describe('checkMandate, the mandate has to be the issuer’s', () => {
     const tampered = { ...mandate, agent: 'agent-rogue' };
 
     expect(reasons(check({ mandate: tampered, amount_minor: -1 }))).toEqual([
-      'amount_not_integer_minor_units',
+      'amount_invalid',
       'signature_invalid',
     ]);
   });

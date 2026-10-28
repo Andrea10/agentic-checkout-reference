@@ -483,6 +483,32 @@ D40 to D49 are T04's. All are PROPOSED and await a ruling.
   change the refusal vocabulary T07a is about to build on, so the wording
   moved and the code did not. T10 may want to rename it while consolidating.
 
+## D59 · The amount refusal is named `amount_invalid` — ACCEPTED (Andrea, 28 Oct)
+
+- **Decision.** Rename the reason code `amount_not_integer_minor_units` to
+  `amount_invalid`, the name T05's `StubRail` already uses for the same case.
+  One name now covers both things the gate refuses: an amount that is not a
+  whole number of minor units, and an amount of zero. Nothing else changes —
+  same check, same message, same position in the union.
+- **Alternative.** Keep `amount_not_integer_minor_units` and rename in T10, as
+  D58's cost first proposed, on the grounds that renaming a refusal code
+  changes vocabulary other tasks are about to read.
+- **Why.** Zero *is* an integer, so after D58 the old name no longer described
+  what the check does: it refused things the name said were fine. `StubRail`
+  already declines the same case as `amount_invalid`, and T07a is about to
+  build its tool-level refusals on this vocabulary — so the moment to settle
+  on one word is before that happens, not after, when the old name would be
+  in the merchant's error envelope as well.
+- **Cost.** The ruled entries above still carry the old name. D58 names
+  `amount_not_integer_minor_units` in its Decision, and its Cost then argues
+  for exactly the rename this entry records, so it reads as a loose end that
+  is only tied off here. D40 to D49 describe the gate in prose rather than by
+  code, so none of them needs a correction. Those entries are ruled and are
+  not edited, which means a reader going through the file in order meets the
+  old name once before reaching this entry. T10 consolidates this file and
+  should fold D42, D58 and D59 together, at which point the old name leaves
+  the repository entirely.
+
 ---
 
 ## T05 · Stub rail

@@ -165,7 +165,7 @@ function decide(policy: MandatePolicy, request: PolicyRequest): PolicyDecision {
 
   if (!isPositiveMinorUnits(amount)) {
     gates.push({
-      reason: 'amount_not_integer_minor_units',
+      reason: 'amount_invalid',
       message: `amount must be a whole number of minor units above zero, got ${amount}`,
     });
   }
