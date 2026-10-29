@@ -1,6 +1,6 @@
 # PRD: agentic-checkout-reference
 
-*v0.7, 28 Oct 2026. Author: Andrea Caputo.*
+*v0.8, 28 Oct 2026. Author: Andrea Caputo.*
 
 ## 0. In plain words
 
@@ -40,8 +40,8 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 **Mandate**
 
 - R1. A mandate is a signed object: principal, agent, merchant, currency, total cap, per-transaction cap, validity window, human-confirm threshold. It is signed with Ed25519 over canonical JSON, and every field present is signed (ruled 27 Oct, P1 to P5; recorded in `docs/DECISIONS.md` as D22 to D26).
-- R2. The merchant first checks two gates, a valid amount and a valid signature, and stops if either fails (D42). Every other check then runs and all failures are reported together, in this order: agent, merchant, window, currency, per-transaction cap, remaining budget. Currency comes before the caps because a cap in one currency says nothing about an amount in another (D43). If nothing failed and the amount is above the human-confirm threshold, the outcome is a confirmation request, not a refusal (D41, R4). Each failure returns a structured refusal reason.
-- R3. Amounts are positive whole numbers of minor units. Zero, fractions and anything else are refused (D58).
+- R2. The merchant first checks **two gates**, a valid amount and a valid signature, and stops if either fails, reporting both if both failed (D42). **Seven checks** then run and all failures are reported together, in this order: agent, merchant, window, currency, the mandate's own limits, per-transaction cap, remaining budget. Currency comes before the caps because a cap in one currency says nothing about an amount in another, and a currency mismatch or an unusable limit suppresses the cap comparisons that depend on it (D43). If nothing failed and the amount is above the human-confirm threshold, the outcome is a confirmation request, not a refusal (D41, R4). Each failure returns a structured refusal reason, and a refused `place_order` carries the whole list under `error.reasons` (D66).
+- R3. Amounts are positive whole numbers of minor units. Zero, fractions and anything else are refused, under the reason code `amount_invalid`, the name the rail already uses for the same case (D58, D59).
 - R4. Above the human-confirm threshold the order is held (`awaiting_confirmation`) for fifteen minutes, until a human confirms with a token. On confirmation the merchant checks again that the stock, the hold and the mandate (expiry, caps, remaining budget) still allow the order; if not, it refuses (D82, D83). A declined card ends the order and spends the token (D84).
 - R5. Every mandate check and every payment outcome (paid, payment declined, capture failed, rail unavailable), pass or fail, is appended to one audit log. Entries are never edited. A refusal that never reaches the rail leaves no payment entry (D99), and a stock refusal at `place_order` leaves no entry at all (D65).
 
@@ -81,15 +81,15 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 ## 8. Standards position
 
 - **MCP:** built on spec revision 2026-07-28 and TypeScript SDK v2 (D09). Sampling, Roots and Logging are deprecated in that revision, so the design does not use them. A TypeScript v2 client negotiates 2026-07-28 against the merchant's stdio entry point; a server mounted without `serveStdio` serves 2025-11-25 (verified by test, D75).
-- **ACP:** merchant objects follow the ACP product-feed and checkout vocabulary where it fits (spec 2026-04-17). Each divergence is a PROPOSED decision.
-- **AP2:** the closest concepts are its Checkout Mandate and Payment Mandate. The repo keeps a flat mandate for Stage 1 and documents the gap (D10); T10 adds a field-by-field mapping.
+- **ACP:** merchant objects follow the ACP product-feed and checkout vocabulary where it fits (spec 2026-04-17, D27). Each divergence is a recorded decision: D27 to D39, all accepted 28 Oct.
+- **AP2:** the closest concepts are its Checkout Mandate and Payment Mandate. The repo keeps a flat mandate for Stage 1 and documents the gap (D10). The field-by-field mapping, the structural divergences and what could not be verified are in `docs/MANDATE.md` §5, written from the AP2 pages re-opened on 2026-10-28 (D112).
 
 Sources and the dates they were read are in `SOURCES.md`.
 
 ## 9. Open questions and risks
 
 - **Open:** how the human confirmation is delivered in a real product (the repo models a token only); nonce versus order-id for replay protection (T12).
-- **Open:** mandate revocation. The repo relies on expiry. A revoked-id check in the policy step is the likely design; a candidate task for Stage 2. UNVERIFIED: how AP2 handles revocation.
+- **Open:** mandate revocation. The repo relies on expiry: a mandate ends only at `valid_until`. A revoked-id check in the policy step is the likely design; a candidate task for Stage 2. AP2 does not close this either — on the five pages read on 2026-10-28 it defines no verifier-checked revocation mechanism, and instead recommends a short `exp` and puts mandate management on the Shopping Agent (`docs/MANDATE.md` §6).
 - **Risk:** specs move. Mitigation: `SOURCES.md` records dates read, and claims are re-verified before they are cited.
 - **Risk:** the repo is read as a conformance claim. Mitigation: the non-goals and divergence notes say plainly that it is not.
 
@@ -104,14 +104,25 @@ sequenceDiagram
   P->>A: signed mandate (limits)
   A->>M: list, cart, quote
   A->>M: place_order + mandate
-  M->>M: verify signature and policy, write audit log
-  alt above confirm threshold
+  M->>M: verify signature and policy, write audit entry
+  alt amount is above the confirm threshold
     M-->>A: awaiting_confirmation + token
+    A-->>P: hands the token back and stops
     P->>M: confirm_order(token)
+    M->>M: re-check the mandate, write a second audit entry
+    M->>R: authorise + capture
+    M->>M: write the settlement entry, then record the spend
+    M-->>P: paid
+  else the mandate covers it outright
+    M->>R: authorise + capture
+    M->>M: write the settlement entry, then record the spend
+    M-->>A: paid
   end
-  M->>R: authorise + capture
-  M-->>A: paid
 ```
+
+Both paths in full, with the real tool names and order states, are in
+`docs/SEQUENCE.md`. The pieces, the checks and the known limits are in
+`docs/ARCHITECTURE.md`.
 
 ## 11. Glossary
 

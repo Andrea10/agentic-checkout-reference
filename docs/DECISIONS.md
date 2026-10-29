@@ -2539,6 +2539,8 @@ bank (D55).
   `test/merchant/place-order.test.ts`) and in PRD R10, which is Stage 2. A
   third run would show it; the task asked for two, and a refusal is better
   read as a test than as a paragraph.
+- *Amended by D116: the two mandates differ in two fields, not one — the
+  threshold and `mandate_id`.*
 
 ## D107 · Money is printed as pounds and pence beside the minor units — ACCEPTED (Andrea, 28 Oct)
 
@@ -2612,3 +2614,274 @@ bank (D55).
   `npm run demo` exits 0, which is checked by hand in the fresh-clone run
   recorded in the pull request, and by CI only to the extent that the build
   compiles the file.
+
+---
+
+## T10 · Docs
+
+D110 to D115 are T10's. All are PROPOSED: they are this task's own choices
+about the documentation, and nothing here changes code or amends a ruled
+entry.
+
+## D110 · An index, not a consolidation — PROPOSED
+
+- **Decision.** `docs/DECISIONS.md` is left exactly as it stands — no entry
+  rewritten, reordered, renumbered or deleted, and no status changed — and
+  `docs/DECISIONS_INDEX.md` is added beside it: a generated table of **every**
+  entry with its id, title and status verbatim, a map of which entry amends
+  which, and ten decisions picked out for a reader with five minutes.
+  (Corrected in review round 1: this read "all 109 entries", the count before
+  this task appended its own. The index is generated from the headings, so it
+  carries whatever the file holds — 116 as of D116.) One cross-reference line
+  of the kind the brief allowed was appended, on D106, pointing at D116;
+  nothing else above D110 was touched.
+- **Alternative.** The literal reading of the T10 row: consolidate the file.
+  Fold D21 into D06, D59 into D42 and D58, D90 to D93 into D70, D76 and D77,
+  D94 to D99 into D48, D65 and D86 — which is what D21, D49, D58, D59 and the
+  D90 preamble each explicitly invite T10 to do. Or the middle option: leave
+  the entries alone but append "amended by D##" to each target.
+- **Why.** Several of the entries a consolidation would fold together are
+  *about* the fact that an earlier entry went stale and was amended rather than
+  edited. D21 exists because a worker inserted a dated note into a ruled entry
+  and pre-review was right that an insertion is not an append. D90 carries a
+  correction made by the build lead from a diff, recording that the entry's
+  first draft was wrong about what changed. D59's cost is a paragraph about the
+  old name surviving in ruled entries above it. Folding those in would delete
+  the evidence and leave a file that reads as though the decisions had been
+  right first time — which is the opposite of what a reader judging this
+  repository should see. The amendment chains are also only eight rows; they
+  are a navigation problem, and an index solves navigation problems without
+  touching the thing being navigated. The file is append-only by Andrea's
+  ruling of 26 Oct, and "T10 consolidates it" is the one instruction in the
+  queue that asks a worker to edit ruled entries — worth declining rather than
+  doing quietly.
+- **Cost.** The invitations in D21, D49, D58, D59 and D90 go unanswered, so a
+  reader following any of them to "T10 consolidates this file" finds that it
+  did not. `amount_not_integer_minor_units` therefore still appears in D58 as a
+  name the repository no longer uses, and D06 still cites an SDK that D09
+  replaced — both correct as ruled, both stale as code. A second file also has
+  to be kept in step with the first: the index is generated from the headings,
+  so the table survives an append, but the amendment map and the ten picks are
+  hand-written and will drift if later tasks add entries without revisiting
+  them. **This is the entry I would most like overruled if you read the T10 row
+  literally** — the consolidation is a mechanical afternoon's work and the file
+  would be shorter; I think it would also be less honest.
+
+## D111 · Every claim is tied to a file or a decision, in brackets — PROPOSED
+
+- **Decision.** Every statement in `ARCHITECTURE.md`, `SEQUENCE.md` and
+  `MANDATE.md` about how the code behaves carries its source inline, in
+  brackets: either the file that implements it (`merchant/pay.ts`) or the
+  decision that ruled it (D98), usually both. Each section was written, then
+  re-read against the code or the decision before it was kept. Where a claim
+  could not be grounded it was cut rather than softened, and where a fact could
+  not be established it is written UNVERIFIED and listed as such.
+- **Alternative.** Prose with a short "see also" list per document, which reads
+  better and is how most architecture documents are written. Or citing only the
+  decisions, since they are the authority.
+- **Why.** The failure mode this repository is most exposed to is a confident
+  sentence about code that is wrong — a reader who clones it and finds the docs
+  describing a different program stops trusting the whole thing, including the
+  parts that are right. Inline citation makes a wrong claim *cheap to catch*:
+  a reviewer sampling ten rows can check ten files. Citing the decision alone
+  would not have been enough, and the audit of this task found why: in four
+  places a ruled decision and the shipped code disagree, because a later
+  decision changed the code and an older comment stayed (the list is in this
+  task's pull request). A document citing only decisions would have reproduced
+  all four errors faithfully.
+- **Cost.** The prose is noisier than it would otherwise be, and a reader who
+  trusts the documents does not need any of the brackets. The citations are
+  also a maintenance surface of their own: a file renamed in Stage 2 leaves a
+  dead reference in three documents, and nothing automated checks them —
+  the compiler cannot see inside a code fence. Decision numbers are the stabler
+  half of each citation, which is why most claims carry both.
+
+## D112 · AP2 was re-opened for the mapping, not taken from SOURCES.md — PROPOSED
+
+- **Decision.** The AP2 mapping in `docs/MANDATE.md` was written from pages
+  opened on 2026-10-28, not from SOURCES.md's notes of 2026-10-27. Five pages
+  were read: the specification and the Checkout Mandate, which SOURCES.md
+  lists, plus the Payment Mandate, Agent Authorization and Implementation
+  Considerations pages, which it does not. `MANDATE.md` §7 names all five,
+  records the three places where the pages carry detail SOURCES.md does not,
+  and marks three things UNVERIFIED rather than inferring them.
+- **Alternative.** Build the mapping from SOURCES.md, which was written by T02
+  for exactly this purpose, was verified by a worker that opened the URLs, and
+  is one day old.
+- **Why.** SOURCES.md's AP2 section is accurate and it is also not enough for a
+  field-by-field mapping, because it was never meant to be: its Payment Mandate
+  notes come from the *specification* page, which summarises the Payment
+  Mandate and points at a dedicated page for the fields. That page — the one
+  holding `transaction_id`, `payee`, `payment_amount`, `payment_instrument`,
+  `pisp`, `execution_date` and `risk_data` — is not in SOURCES.md, so a mapping
+  built from SOURCES.md alone would have had to guess at half the table or
+  leave it blank. D10 asks for the gap to be *described*, and a description
+  assembled from a summary of a summary would be the kind of unverified claim
+  the factory rules forbid. Opening the pages also settled the PRD's open
+  question about revocation, which no amount of re-reading SOURCES.md could
+  have done.
+- **Cost.** This task read pages SOURCES.md does not list, and SOURCES.md
+  belongs to T02 and may not be edited here — so the repository now has a
+  document citing sources its own source list does not carry. The three
+  refinements and the two extra URLs are recorded in `MANDATE.md` §7 and in
+  this task's pull request so that a later task can fold them into SOURCES.md,
+  but until then the two files disagree about what has been read. A reader
+  checking SOURCES.md for the Payment Mandate page will not find it.
+
+## D113 · The docs count the policy checks as two gates and then seven — PROPOSED
+
+- **Decision.** `ARCHITECTURE.md` and `MANDATE.md` both describe
+  `checkMandate()` as **two gates, then seven checks**, with the seven listed
+  by name and the window treated as one check with three possible reasons.
+- **Alternative.** Count the gates among the checks and say "nine checks", or
+  count each reason code separately and say "twelve". Or follow the demo's
+  wording exactly — `scripts/demo.ts` prints "the seven checks, in the order
+  they run" for `mandate/policy.ts`, naming the seven and leaving the gates
+  implicit.
+- **Why.** The demo's seven and the code's seven are the same seven: D42's own
+  wording is "all seven scope and limit checks run", and the function has two
+  gates above them. So "two gates, then seven checks" is the one phrasing that
+  agrees with the demo, with D42 and with the code at the same time, while
+  saying out loud the thing the demo's line leaves implicit. Counting twelve
+  would be counting reason codes, not checks — three of the twelve belong to
+  one window check and three to the two gates (`amount_invalid`,
+  `signature_invalid`, `mandate_malformed`), leaving six checks with one code
+  each (corrected in review round 1, which read "two to the gates" and so came
+  to eleven) — and a reader who counted the table
+  rows against the refusal list would find the two numbers disagreeing with no
+  explanation. The docs and the demo are read side by side, so they must not
+  present two counts of one function.
+- **Cost.** The demo's line still says "the seven checks" without mentioning
+  the gates, so a reader going from the terminal to the docs meets seven and
+  then nine things. `scripts/` is outside this task's directories, so the
+  wording was not changed there; it is reported in the pull request instead. If
+  it is ever edited, "the two gates and the seven checks" is the phrase that
+  would match these documents.
+
+## D114 · Known limits are one list in ARCHITECTURE.md, not scattered — PROPOSED
+
+- **Decision.** Every gap in Stage 1 is stated in one section,
+  `ARCHITECTURE.md` §6, each with the decision that ruled it: the unauthenticated
+  agent id (D61), the in-memory ledger (D44), the double-spend window between
+  check and record (D45), the stock refusal that leaves no audit entry (D65,
+  D99), the credential held for fifteen minutes (D83), the declined card that
+  ends the order (D84), concurrent confirmations granting two authorisations,
+  the non-atomic paid-then-ledger step (D87, D98), `StdioServerCommand` having
+  no `env` field (D105), and revocation as a non-goal. The two items T12 now
+  owns — the test pinning `settle()`'s write order and the comment fix in
+  `mandate/audit.ts` — are named there as accepted and scheduled rather than as
+  open gaps.
+- **Alternative.** Put each limit next to the mechanism it limits, so a reader
+  of the audit-log section learns there what the audit log does not record.
+  Or leave them in the decisions, where each already has a Cost paragraph
+  saying the same thing.
+- **Why.** The reader this repository is written for is judging whether the
+  author understands the authorisation problem, and the fastest way to answer
+  that is to see what the author says it does *not* do. Scattered through nine
+  sections, those admissions read as caveats; collected, they read as an
+  assessment — and a hiring manager with ten minutes can find the whole of it
+  in one scroll. The decisions' Cost paragraphs are the authority but not the
+  summary: there are over a hundred of them and the limits that matter are in
+  ten. Several
+  limits also belong to no single mechanism — the double-spend window is the
+  policy and the ledger and the rail call together — so they have no obvious
+  home anywhere else.
+- **Cost.** Each limit is now stated twice, in the decision's Cost and in the
+  list, and the two can drift: a later task that changes D84's behaviour will
+  update the decision and may not update the list. The section is also long
+  enough to be read as a catalogue of faults by a reader who skips the first
+  sentence saying they are deliberate. And collecting them makes the weakest
+  parts of the repository the easiest thing to find in it, which is the right
+  trade for a reference implementation and would be the wrong one for a
+  product.
+
+## D115 · Code and comments that disagree with a decision are reported, not fixed — PROPOSED
+
+- **Decision.** Four places where a code comment contradicts a ruled decision
+  or the shipped behaviour were found while grounding these documents, and none
+  was fixed. They are listed in this task's pull request, the documents describe
+  the code as it actually behaves, and `ARCHITECTURE.md` says in its opening
+  that where a file and a decision disagree the file wins.
+- **Alternative.** Fix them — they are four comments, the changes are
+  two-line edits, and leaving a known-wrong comment in a repository a hiring
+  manager will read is a real cost. Or soften the documents to agree with both,
+  which would mean writing a sentence that is true of neither.
+- **Why.** T10's directories are `docs/` and the README status table. A docs
+  task that edited `agent/order.ts` because it had found a stale comment would
+  be doing exactly the thing that produced the stale comments: a worker making
+  a small change outside its brief because it looked obviously right. One of
+  the four is already owned by T12 (the `mandate/audit.ts` comment about the
+  demo's stream, D102), which shows the factory's own route for this works.
+  Reporting also puts the list in front of Andrea, who can hand it to a task
+  with the right directories in one line, rather than burying four
+  unreviewed edits in a docs pull request.
+- **Cost.** The comments stay wrong until somebody schedules them, and three of
+  the four have no task yet. A reader of `agent/order.ts` is told that nothing
+  is paid there and that the merchant answers `approved`, both of which D88
+  changed — and that reader has no reason to go looking for a pull request
+  comment contradicting the file in front of them. That is a worse failure than
+  a stale decision, because a comment sits where the code is read. The honest
+  summary is that this decision is right about process and leaves a real defect
+  in place; the list is the mitigation, and it is a weak one.
+
+## D116 · Amends D106: the two demo runs differ in two mandate fields, not one — PROPOSED
+
+D106 is ruled and is left as it stands. Its Decision says the two runs buy the
+same basket "under mandates that are identical except for
+`human_confirm_above_minor`: 3000 in run 1, the README's 2000 in run 2". The
+code says otherwise and the code is what ships, so the correction is recorded
+here and a pointer line was appended to D106.
+
+`scripts/demo.ts` declares both mandates as literals:
+
+```ts
+export const RUN_ONE = {
+  mandate_id: '11111111-1111-4111-8111-111111111111',
+  human_confirm_above_minor: 3000,
+} as const;
+
+export const RUN_TWO = {
+  mandate_id: '22222222-2222-4222-8222-222222222222',
+  human_confirm_above_minor: 2000,
+} as const;
+```
+
+Both ids print: run 1's audit lines name mandate `1111…` and run 2's name
+`2222…`. Everything else the two mandates carry is identical — the same
+principal, agent and merchant, the same 5000 total cap, the same 2500
+per-transaction cap, the same GBP, and the same 25-to-26 October window
+(`demoClaims` in `scripts/demo.ts`).
+
+- **Decision.** The documents say the two mandates differ in **two** fields,
+  and say which one matters: `human_confirm_above_minor` is the field that
+  decides the path, and `mandate_id` differs for reasons that have nothing to
+  do with the path. `docs/ARCHITECTURE.md` §2, `docs/SEQUENCE.md` §2 and
+  `docs/MANDATE.md` §1a all state it that way.
+- **Alternative.** Keep D106's sentence, on the grounds that the second field
+  is incidental and "differ by exactly one field" is the argument the demo is
+  making. Or make it true by giving both runs the same `mandate_id`, which is
+  a change to `scripts/` and outside this task's directories.
+- **Why.** D106's claim is load-bearing: the whole point of the demo's second
+  run is that one number a person chose decided whether software had to stop
+  and ask, and "everything else is held still" is what makes that argument.
+  A reader who checks it against `scripts/demo.ts` finds two fields differing
+  and has no way to tell which of them mattered — which costs more trust than
+  the extra clause costs to read. It is also worth being precise about *why*
+  the ids differ, because the obvious guess is wrong: it is **not** to give
+  each run its own budget. Each run calls `startMerchant()`, which builds its
+  own `createMandatePolicy(...)`, so each run already has a separate spend
+  ledger and a separate audit log; two runs under one `mandate_id` would still
+  both have the full 5000 cap. The ids are literals rather than
+  `randomUUID()` because the output has to be byte-identical between
+  invocations (D103), and they are *different* literals so that each run's
+  audit lines name their own authority rather than appearing to continue the
+  previous run's.
+- **Cost.** A longer sentence in three documents where D106 had a short one,
+  and a reader now has to hold the distinction between the field that decides
+  the path and the field that is bookkeeping. D106 and D116 also now say
+  different things about the same two objects, which is one more amendment
+  chain in a file that already has eight — the cost D110 accepted when it chose
+  an index over a consolidation. The alternative worth noting: if `scripts/`
+  is ever touched again, giving both runs one `mandate_id` would make D106
+  true as written and delete this entry, at the price of an audit log whose
+  two runs are harder to tell apart.
