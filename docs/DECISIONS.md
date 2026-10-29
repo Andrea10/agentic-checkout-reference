@@ -2619,11 +2619,12 @@ bank (D55).
 
 ## T10 · Docs
 
-D110 to D115 are T10's. All are PROPOSED: they are this task's own choices
-about the documentation, and nothing here changes code or amends a ruled
-entry.
+D110 to D116 are T10's, seven entries, all accepted by Andrea on 29 Oct. They
+are this task's own choices about the documentation, and none of them changes
+code. One amends a ruled entry: D116 amends D106 by name, and under D110 a
+pointer line to D116 was appended to D106.
 
-## D110 · An index, not a consolidation — PROPOSED
+## D110 · An index, not a consolidation — ACCEPTED (Andrea, 29 Oct)
 
 - **Decision.** `docs/DECISIONS.md` is left exactly as it stands — no entry
   rewritten, reordered, renumbered or deleted, and no status changed — and
@@ -2667,7 +2668,7 @@ entry.
   literally** — the consolidation is a mechanical afternoon's work and the file
   would be shorter; I think it would also be less honest.
 
-## D111 · Every claim is tied to a file or a decision, in brackets — PROPOSED
+## D111 · Every claim is tied to a file or a decision, in brackets — ACCEPTED (Andrea, 29 Oct)
 
 - **Decision.** Every statement in `ARCHITECTURE.md`, `SEQUENCE.md` and
   `MANDATE.md` about how the code behaves carries its source inline, in
@@ -2696,7 +2697,7 @@ entry.
   the compiler cannot see inside a code fence. Decision numbers are the stabler
   half of each citation, which is why most claims carry both.
 
-## D112 · AP2 was re-opened for the mapping, not taken from SOURCES.md — PROPOSED
+## D112 · AP2 was re-opened for the mapping, not taken from SOURCES.md — ACCEPTED (Andrea, 29 Oct)
 
 - **Decision.** The AP2 mapping in `docs/MANDATE.md` was written from pages
   opened on 2026-10-28, not from SOURCES.md's notes of 2026-10-27. Five pages
@@ -2728,7 +2729,7 @@ entry.
   but until then the two files disagree about what has been read. A reader
   checking SOURCES.md for the Payment Mandate page will not find it.
 
-## D113 · The docs count the policy checks as two gates and then seven — PROPOSED
+## D113 · The docs count the policy checks as two gates and then seven — ACCEPTED (Andrea, 29 Oct)
 
 - **Decision.** `ARCHITECTURE.md` and `MANDATE.md` both describe
   `checkMandate()` as **two gates, then seven checks**, with the seven listed
@@ -2758,7 +2759,7 @@ entry.
   it is ever edited, "the two gates and the seven checks" is the phrase that
   would match these documents.
 
-## D114 · Known limits are one list in ARCHITECTURE.md, not scattered — PROPOSED
+## D114 · Known limits are one list in ARCHITECTURE.md, not scattered — ACCEPTED (Andrea, 29 Oct)
 
 - **Decision.** Every gap in Stage 1 is stated in one section,
   `ARCHITECTURE.md` §6, each with the decision that ruled it: the unauthenticated
@@ -2795,7 +2796,7 @@ entry.
   trade for a reference implementation and would be the wrong one for a
   product.
 
-## D115 · Code and comments that disagree with a decision are reported, not fixed — PROPOSED
+## D115 · Code and comments that disagree with a decision are reported, not fixed — ACCEPTED (Andrea, 29 Oct)
 
 - **Decision.** Four places where a code comment contradicts a ruled decision
   or the shipped behaviour were found while grounding these documents, and none
@@ -2824,7 +2825,7 @@ entry.
   summary is that this decision is right about process and leaves a real defect
   in place; the list is the mitigation, and it is a weak one.
 
-## D116 · Amends D106: the two demo runs differ in two mandate fields, not one — PROPOSED
+## D116 · Amends D106: the two demo runs differ in two mandate fields, not one — ACCEPTED (Andrea, 29 Oct)
 
 D106 is ruled and is left as it stands. Its Decision says the two runs buy the
 same basket "under mandates that are identical except for
