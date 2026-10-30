@@ -51,3 +51,4 @@ T10b PR #25 opened 2026-10-30T00:12:21Z
 chore add-T10c PR #26 opened 2026-10-30T01:34:09Z
 T10c claimed 2026-10-30T01:39:58Z
 T10c PR #27 opened 2026-10-30T01:42:08Z
+chore stage2-rows PR #28 opened 2026-10-30T11:12:59Z
