@@ -2989,8 +2989,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
     PaymentIntent in a status the rail did not expect, and anything that is
     not a Stripe error at all are **thrown** as `StripeRailError`, with a
     `failure` category, the call, Stripe's code and request id.
-  - `StripeRailError` is built fresh, with no `cause`, and its message has
-    anything shaped like a Stripe key replaced.
+  - `StripeRailError` is built fresh, with no `cause`. Its message, and only
+    its message, has every run matching `KEY_SHAPED` (at a word boundary,
+    `sk_`, `rk_` or `pk_`, then `test_` or `live_`, then ASCII letters,
+    digits and `*`) replaced with
+    `[redacted key]`; Stripe's code and request id are copied unchanged.
   - The request is checked locally first, with `StubRail`'s three rules and
     messages, so an empty `order_ref`, a bad amount or an unsupported
     currency never reaches Stripe.
@@ -3001,9 +3004,10 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   "Stripe rejected a parameter this rail did not expect". A nearest-code guess
   would put a wrong reason into the audit log, so the rail throws instead.
   Throwing is also the conservative direction: the merchant then records
-  nothing as paid or declined (D85). A fresh error with no `cause` is the only
-  way to promise that a thrown object never carries the key, because the
-  SDK's error is not this repo's to control.
+  nothing as paid or declined (D85). A fresh error with no `cause` lets the
+  rail choose what a thrown object carries, because the SDK's error is not
+  this repo's to control: a message with key-shaped runs replaced, and
+  Stripe's code and request id, which are not scrubbed.
 - **Cost.** This departs from D50's "`invalid_request_error` become[s] [a]
   decline" for the unnamed cases. If Stripe adds a parameter error the rail
   should have declined, it shows up as `rail_unavailable` until it is mapped.

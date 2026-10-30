@@ -13,10 +13,12 @@
  *   handed over with the mandate would verify every mandate, including one the
  *   agent signed itself.
  *
- * Both are read from the environment so that T09's demo can issue a mandate,
- * export the public key and start the server with it, and so that nothing has
- * to be written to a file. A public key is not a secret; nothing secret is
- * read here, and no key is ever logged.
+ * Both are read from an environment, so that nothing has to be written to a
+ * file. `merchant/stdio.ts` passes `process.env`. The demo does not start that
+ * server: it exports the public key, hands `configFromEnvironment` a synthetic
+ * environment holding it, and hosts the merchant in its own process (D100). A
+ * public key is not a secret; nothing secret is read here, and nothing in this
+ * file writes to a log or a stream.
  */
 
 import { importPublicKey, createMandatePolicy } from '../mandate/index.js';

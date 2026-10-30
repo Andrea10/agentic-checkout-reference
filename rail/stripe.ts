@@ -32,9 +32,12 @@
  * when no client is injected. A key that does not start with `sk_test_` is
  * refused before a client exists, so a rail that builds its own client cannot
  * be pointed at live money. A client passed in is the caller's: the rail never
- * sees its key. No log entry has a field a key could go in, and what the rail
- * throws is built so as not to carry one: see {@link StripeKeyError} and
- * {@link StripeRailError}.
+ * sees its key. A log entry holds a time, the rail's name, the call, the
+ * outcome, the order reference, the authorisation id, an amount, a currency
+ * and a decline code; it has no field for the key or for a Stripe message.
+ * What the rail throws: {@link StripeKeyError} carries a fixed sentence per
+ * problem and never the value, and {@link StripeRailError} carries a message
+ * with key-shaped runs replaced, plus Stripe's code and request id unchanged.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -191,8 +194,10 @@ export type StripeRailFailure =
  *
  * Built fresh rather than rethrowing the SDK's error, and with no `cause`:
  * the SDK error is an object this rail does not control, holding text from
- * Stripe's response. The message is scrubbed of anything key-shaped. What survives is what a reader needs to look the
- * request up: the category, the call, Stripe's error code and request id.
+ * Stripe's response. `scrubKeys` is applied to the message only: every run
+ * matching `KEY_SHAPED` becomes `[redacted key]`. Stripe's error code and
+ * request id are copied through unchanged. What a reader gets to look the
+ * request up is the category, the call, that code and that request id.
  */
 export class StripeRailError extends Error {
   override readonly name = 'StripeRailError';
