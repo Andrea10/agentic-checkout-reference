@@ -64,3 +64,8 @@ T11 UNVERIFIED: that a full ACR_RAIL=stripe demo run completes against a Stripe 
 T11 fresh demo check: npm run demo twice on main and twice on task/T11, stdout sha256 308761f0…f9b for all four, stderr empty for all four 2026-10-30T12:31:36Z
 T11 PR #29 opened 2026-10-30T12:33:35Z
 T12a claimed 2026-10-30T15:03:08Z
+T12a NEEDS-ANDREA: PRD R10 and the T12a row say replay "appears in the audit log" like the other cases; D65 and D99 (ACCEPTED) rule that a refusal before the mandate check writes no entry, and every replay is refused there (quote_already_ordered, order_already_paid, order_not_awaiting_confirmation, confirmation_token_spent). Built to D65/D99: the tests assert a replay leaves the printed log exactly as the first call left it. Logging replays needs a third entry kind (D99's alternative) — rule which reading holds 2026-10-30T15:22:07Z
+T12a gap closed (D126 PROPOSED): confirm_order replayed after authorise threw reached the rail a second time (D85 left the token live); the token is now spent on that path, order status and ledger unchanged 2026-10-30T15:22:07Z
+T12a mutations: 12 applied and restored, each failed at least one new test (list in the PR) 2026-10-30T15:22:07Z
+T12a demo check: npm run demo twice on origin/main and twice on task/T12a, stdout sha256 308761f0…6f9b for all four, stderr empty for all four 2026-10-30T15:22:07Z
+T12a load note: test/agent/protocol.test.ts "reads the tool list over the negotiated connection" (spawns merchant/stdio.ts, 5 s timeout) timed out locally three times at load average ~635; see the fresh-clone line for the result at lower load 2026-10-30T15:22:07Z
