@@ -176,8 +176,15 @@ export interface StdioServerCommand {
 /**
  * Spawns a stdio MCP server and connects to it.
  *
- * This is the production path: `merchant/stdio.ts` is such a command, and
- * T09's demo starts the merchant this way.
+ * `merchant/stdio.ts` is such a command, but this helper passes the child no
+ * environment beyond the SDK's default allowlist, so a merchant started this
+ * way has no `ACR_MANDATE_PUBLIC_KEY` and refuses to take orders (D105).
+ * The tests in `test/agent/` use it to read a spawned merchant's tool list,
+ * catalogue and protocol revision, and never to place an order. T09's demo
+ * does not use it — it hosts the merchant in its own process over the
+ * in-memory transport (D100) — and `scripts/stdio-smoke.test.ts`, which
+ * places an order against a spawned merchant, builds its own transport and
+ * calls {@link connect}.
  */
 export async function connectStdio(
   server: StdioServerCommand,
