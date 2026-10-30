@@ -69,3 +69,5 @@ T12a gap closed (D126 PROPOSED): confirm_order replayed after authorise threw re
 T12a mutations: 12 applied and restored, each failed at least one new test (list in the PR) 2026-10-30T15:22:07Z
 T12a demo check: npm run demo twice on origin/main and twice on task/T12a, stdout sha256 308761f0…6f9b for all four, stderr empty for all four 2026-10-30T15:22:07Z
 T12a load note: test/agent/protocol.test.ts "reads the tool list over the negotiated connection" (spawns merchant/stdio.ts, 5 s timeout) timed out locally three times at load average ~635; see the fresh-clone line for the result at lower load 2026-10-30T15:22:07Z
+T12a fresh clone of task/T12a at 96078bc: npm ci, lint, build, typecheck, test (667 passed, 1 skipped) all exit 0 at load ~130 2026-10-30T15:27:43Z
+T12a PR #30 opened 2026-10-30T15:27:43Z
