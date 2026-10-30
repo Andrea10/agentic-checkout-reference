@@ -4,9 +4,9 @@
 
 The table below is generated from its `## D..` headings: every id, every title
 and every status, verbatim. **116 decisions, D01 to D116, with no gaps.** The
-first 109 are all ACCEPTED — ruled by Andrea, 25 on 27 October and 84 on 28
-October, with none outstanding. The last seven are this task's own and are
-PROPOSED, awaiting a ruling.
+116 are all ACCEPTED — ruled by Andrea, 25 on 27 October, 84 on 28 October
+and 7 on 29 October, with none outstanding. The last seven, D110 to D116, are
+T10's own.
 
 Counts, which a reviewer can check against the file with
 `grep -c '^## D' docs/DECISIONS.md`:
@@ -19,7 +19,7 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 28 Oct, as corrected)` | 1 |
 | `ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)` | 1 |
 | `ACCEPTED (Andrea, 28 Oct; the write order is pinned by a test added to T12)` | 1 |
-| `PROPOSED` | 7 |
+| `ACCEPTED (Andrea, 29 Oct)` | 7 |
 | **Total** | **116** |
 
 If you have five minutes, read §3 and nothing else.
@@ -192,13 +192,13 @@ appending rather than editing.
 | D107 | Money is printed as pounds and pence beside the minor units | ACCEPTED 28 Oct | Demo | Pounds are what a person checks against the mandate they signed; pence are what every field actually holds. |
 | D108 | The demo configures its merchant through `configFromEnvironment` | ACCEPTED 28 Oct | Demo | The export-and-import round trip is the one the shipped entry point makes, so it is worth exercising. |
 | D109 | `scripts/demo.ts` is a module with an entry guard | ACCEPTED 28 Oct | Demo | The demo is a success criterion, so it needs tests that fail when it breaks rather than prose matching. |
-| D110 | An index, not a consolidation | PROPOSED | Decisions | Rewriting ruled entries would delete the evidence that several of them are *about* an earlier entry going stale. |
-| D111 | Every claim is tied to a file or a decision, in brackets | PROPOSED | Docs | Past tasks failed on confident statements about code that were wrong; a citation is cheap and checkable. |
-| D112 | AP2 was re-opened for the mapping, not taken from SOURCES.md | PROPOSED | Docs | SOURCES.md's AP2 notes came from the specification page, and the Payment Mandate's fields live on a page it does not list. |
-| D113 | The docs count the policy checks as two gates and then seven | PROPOSED | Docs | The demo already says "the seven checks", and two counts of the same function would be worse than either. |
-| D114 | Known limits are one list in ARCHITECTURE.md, not scattered | PROPOSED | Docs | A reader judging the authorisation story should be able to find everything it does not do in one place. |
-| D115 | Code and comments that disagree with a decision are reported, not fixed | PROPOSED | Docs | T10's directories are `docs/` and the README; a docs task editing `agent/` would be the drift it is meant to catch. |
-| D116 | Amends D106: the two demo runs differ in two mandate fields, not one | PROPOSED | Demo | `mandate_id` differs as well as the threshold, and only the threshold decides the path. |
+| D110 | An index, not a consolidation | ACCEPTED 29 Oct | Decisions | Rewriting ruled entries would delete the evidence that several of them are *about* an earlier entry going stale. |
+| D111 | Every claim is tied to a file or a decision, in brackets | ACCEPTED 29 Oct | Docs | Past tasks failed on confident statements about code that were wrong; a citation is cheap and checkable. |
+| D112 | AP2 was re-opened for the mapping, not taken from SOURCES.md | ACCEPTED 29 Oct | Docs | SOURCES.md's AP2 notes came from the specification page, and the Payment Mandate's fields live on a page it does not list. |
+| D113 | The docs count the policy checks as two gates and then seven | ACCEPTED 29 Oct | Docs | The demo already says "the seven checks", and two counts of the same function would be worse than either. |
+| D114 | Known limits are one list in ARCHITECTURE.md, not scattered | ACCEPTED 29 Oct | Docs | A reader judging the authorisation story should be able to find everything it does not do in one place. |
+| D115 | Code and comments that disagree with a decision are reported, not fixed | ACCEPTED 29 Oct | Docs | T10's directories are `docs/` and the README; a docs task editing `agent/` would be the drift it is meant to catch. |
+| D116 | Amends D106: the two demo runs differ in two mandate fields, not one | ACCEPTED 29 Oct | Demo | `mandate_id` differs as well as the threshold, and only the threshold decides the path. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.
