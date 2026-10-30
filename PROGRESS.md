@@ -47,3 +47,4 @@ T10 review round 1 fixed: 7 reviewer findings confirmed against the AP2 pages an
 T10 fresh clone of task/T10 at f8d4d70: npm ci, npm install, test (573), lint, build, typecheck and demo all exit 0; two invocations byte-identical; index 116 rows cross-checked; all 3 diagrams re-render 2026-10-28T23:42:43Z
 chore post-T10 PR #24 opened 2026-10-29T23:57:38Z
 T10b claimed 2026-10-30T00:09:23Z
+T10b PR #25 opened 2026-10-30T00:12:21Z
