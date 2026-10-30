@@ -14,7 +14,7 @@
 - T10: option A (index instead of consolidating DECISIONS.md). T10b: option A (comment-only fixes as a separate task).
 
 ## Tasks moved
-- T07c added (13 Stage 1 tasks). T10b added. T12 loses the audit.ts comment fix (moved to T10b, with the sixth stale comment agent/order.ts:96-98).
+- T07c added (13 Stage 1 tasks). T10b added. T12 loses the audit.ts comment fix (moved to T10b, with a fifth stale comment agent/order.ts:96-98).
 
 ## Open decisions
 - "Run forever" mode: A continuous level B (recommended), B plus maintenance backlog after Stage 3, C level C. Not chosen.
