@@ -63,8 +63,9 @@ export function issue(claims: MandateClaims, privateKey: KeyObject): Mandate {
  * signed field has changed since.
  *
  * This is the signature check and nothing else. Whether the mandate is in
- * date, names the right agent or merchant, or has budget left is policy, and
- * belongs to T04.
+ * date, names the right agent or merchant, or has budget left is policy:
+ * `checkMandate()` in `policy.ts` asks that, and calls this function as its
+ * second gate (D40).
  *
  * @throws TypeError if `publicKey` is not an Ed25519 key.
  */

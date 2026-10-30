@@ -94,7 +94,12 @@ export async function settle(
     // The rail may or may not have taken the money. The order keeps the state
     // it had and the ledger is untouched: recording either outcome would be a
     // guess (D50, D85). The audit line says exactly that much — which call
-    // went unanswered — and no more.
+    // went unanswered — and no more. A held order's token is spent all the
+    // same: this attempt reached the rail, and a replay must not ask it for a
+    // second hold (D84, D126).
+    if (order.status === 'awaiting_confirmation') {
+      orders.spendToken(order.confirmation_token);
+    }
     logSettlement(context, order, { outcome: 'rail_unavailable', rail_call: 'authorise' });
     throw new RailUnavailableError('authorise', thrown);
   }

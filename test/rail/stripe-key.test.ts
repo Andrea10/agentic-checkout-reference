@@ -1,6 +1,7 @@
 /**
  * The key guard: the Stripe rail takes its key from `STRIPE_SECRET_KEY` only,
- * accepts only a test-mode secret key, and never repeats the key anywhere.
+ * accepts only a test-mode secret key, and does not repeat the key in what it
+ * throws or in what the rail object exposes.
  *
  * The key values below are made up. None of them is, or was, a real key.
  */

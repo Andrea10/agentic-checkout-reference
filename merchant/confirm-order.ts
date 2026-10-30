@@ -16,7 +16,8 @@
  *
  * 1. **Is this merchant able to take orders at all?** (D60.)
  * 2. **Is the token good, and is its order still waiting?** A token releases
- *    one payment (D84): a second confirmation is refused, by name.
+ *    one payment (D84): a second confirmation is refused, by name — including
+ *    after an attempt the rail never answered (D126).
  * 3. **Has the hold lapsed?** Fifteen minutes (D82).
  * 4. **Is the stock still there?** Re-read from the catalogue (D17), against
  *    the order's own lines.
@@ -73,7 +74,8 @@ export type ConfirmOrderResult = z.infer<typeof confirmOrderOutput>;
  *
  * @throws MerchantError `merchant_misconfigured`,
  * `confirmation_token_unknown`, `order_already_paid`,
- * `order_not_awaiting_confirmation`, `order_expired`, `insufficient_stock`;
+ * `order_not_awaiting_confirmation`, `confirmation_token_spent`,
+ * `order_expired`, `insufficient_stock`;
  * {@link MandateRefusedError} when the mandate no longer authorises the
  * purchase; and the rail errors from `pay.ts` when the payment does not go
  * through.

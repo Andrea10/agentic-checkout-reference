@@ -52,7 +52,10 @@ export interface Mandate extends MandateClaims {
 /** The one field of a mandate that the signature does not cover. */
 export const SIGNATURE_FIELD = 'signature';
 
-/** Why a signature check failed. Policy refusals belong to T04, not here. */
+/**
+ * Why a signature check failed. Policy refusals are `PolicyRefusalReason` in
+ * `decision.ts`, which includes these two.
+ */
 export type VerifyFailureReason =
   /** The signature does not match the claims under the given public key. */
   | 'signature_invalid'
@@ -60,8 +63,9 @@ export type VerifyFailureReason =
   | 'mandate_malformed';
 
 /**
- * Result of {@link verify}. A deliberate union rather than a boolean: T04 adds
- * policy refusals with their own reasons, and the audit log records each one.
+ * Result of {@link verify}. A deliberate union rather than a boolean (D25): the
+ * reason is passed on by `checkMandate()` as one of its refusal reasons, and
+ * the audit log records it.
  */
 export type VerifyResult =
   | { readonly ok: true }

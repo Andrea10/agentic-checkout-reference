@@ -37,7 +37,9 @@ export type MerchantErrorCode =
   | 'order_expired'
   | 'payment_declined'
   | 'capture_failed'
-  | 'rail_unavailable';
+  | 'rail_unavailable'
+  // T12a: replay.
+  | 'confirmation_token_spent';
 
 /** A refusal the agent is expected to read and act on. */
 export class MerchantError extends Error {
