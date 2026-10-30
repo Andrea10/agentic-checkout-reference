@@ -85,10 +85,11 @@ describe('the demo rail switch', () => {
   it('with ACR_RAIL=stripe and no key, exits non-zero with one line on stderr and nothing on stdout', () => {
     const demo = fileURLToPath(new URL('../../scripts/demo.ts', import.meta.url));
     const tsx = fileURLToPath(new URL('../../node_modules/.bin/tsx', import.meta.url));
-    const env: NodeJS.ProcessEnv = { ...process.env, ACR_RAIL: 'stripe' };
+    // stripe@23.1.0 writes a line to stderr when it loads and CLAUDECODE is
+    // set. Setting it here makes this test fail if the demo ever loads the SDK
+    // before refusing, wherever the test runs.
+    const env: NodeJS.ProcessEnv = { ...process.env, ACR_RAIL: 'stripe', CLAUDECODE: '1' };
     delete env['STRIPE_SECRET_KEY'];
-    // The Stripe SDK writes a hint to stderr on load under these two variables;
-    // the demo must not load it before refusing, so they stay set if present.
 
     const run = spawnSync(tsx, [demo], { env, encoding: 'utf8' });
 
