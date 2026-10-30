@@ -52,3 +52,13 @@ chore add-T10c PR #26 opened 2026-10-30T01:34:09Z
 T10c claimed 2026-10-30T01:39:58Z
 T10c PR #27 opened 2026-10-30T01:42:08Z
 chore stage2-rows PR #28 opened 2026-10-30T11:12:59Z
+T11 claimed 2026-10-30T12:12:31Z
+T11 VERIFIED: Stripe docs opened 2026-10-30 — place-a-hold-on-a-payment-method, api/payment_intents/create (and ?query=automatic_payment_methods), api/payment_intents/capture, api/errors, error-handling?lang=node, error-codes, testing, api/idempotent_requests, payments/paymentintents/lifecycle; claims ledger in the PR 2026-10-30T12:31:36Z
+T11 VERIFIED: npm view stripe — 23.1.0 latest, MIT, engines node >=20, no dependencies, ships ESM types; typechecks and lints under the repo's strict nodenext config; changelog: pins API 2026-10-28.endive 2026-10-30T12:31:36Z
+T11 VERIFIED: stripe@23.1.0 writes a claude-code-hint line to stderr on module load when CLAUDECODE or CLAUDE_CODE_CHILD_SESSION is set (esm/stripe.esm.node.js); the rail loads the SDK lazily so stub runs never print it (D123) 2026-10-30T12:31:36Z
+T11 UNVERIFIED: whether confirm=true with pm_card_authenticationRequired returns status requires_action or throws a card_error (testing page does not say); both are mapped (D119) 2026-10-30T12:31:36Z
+T11 UNVERIFIED: which error code a second capture of a PaymentIntent returns, and whether the error carries the PaymentIntent; the rail assumes payment_intent_unexpected_state with the PaymentIntent attached (D120) 2026-10-30T12:31:36Z
+T11 UNVERIFIED: that capture of an unknown PaymentIntent id returns resource_missing (the error-code table defines it generically) 2026-10-30T12:31:36Z
+T11 UNVERIFIED: the SDK's default maxNetworkRetries (README says 1, esm/platform/PlatformFunctions.js returns 2); not relied on or asserted 2026-10-30T12:31:36Z
+T11 UNVERIFIED: that a full ACR_RAIL=stripe demo run completes against a Stripe test account in GBP; no key here, no live call made (D125) 2026-10-30T12:31:36Z
+T11 fresh demo check: npm run demo twice on main and twice on task/T11, stdout sha256 308761f0…f9b for all four, stderr empty for all four 2026-10-30T12:31:36Z
