@@ -3123,3 +3123,73 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   to fix them. No Stripe demo run was
   made in this task (no key, by the brief), so whether the whole demo
   completes against a test account is UNVERIFIED.
+
+## D126 · A confirmation token is spent when its attempt reaches the rail and gets no answer — PROPOSED (T12a)
+
+- **Decision.** When `rail.authorise` throws during a `confirm_order`,
+  `settle()` spends the held order's token (`OrderStore.spendToken`) before it
+  writes the `rail_unavailable` line and rethrows. A later `confirm_order` with
+  that token is refused with a new code, `confirmation_token_spent`, which
+  `requireConfirmable` checks after the status checks and before the hold's
+  expiry. Nothing else changes: the order stays `awaiting_confirmation`, the
+  ledger is untouched and the log gets no new line (D85, D99). The direct path
+  needs nothing: its quote is already used (D64).
+- **Alternative.** Leave it, as D85 did: the token stays live and a replay
+  calls `authorise` again. Or spend the token before the first `await` in
+  `confirm_order`, which would also stop two concurrent confirmations, which is
+  T12b's. Or a sixth order state, `payment_unknown`, which D85 rejected. Or an
+  idempotency key on `AuthoriseRequest` so the rail deduplicates (D56's
+  suggestion), which needs `rail/` and is outside this task.
+- **Why.** D84's rule is that the token is spent by the attempt that reaches
+  the rail, and an `authorise` that threw has reached it: the hold may exist.
+  Before this change a replay of the same token asked the rail for a second
+  hold while the first one's fate was unknown, which is the double-authorise
+  D56's and D85's costs both name and hand to T12. Spending the token without
+  moving the order keeps D85's rule that no status is written on a guess. A new
+  code rather than `order_not_awaiting_confirmation`, because the order *is*
+  awaiting confirmation and a message that said otherwise would be false. The
+  mark is written synchronously in the `catch`, so concurrency is left exactly
+  as it was for T12b.
+- **Cost.** An order whose `authorise` threw is now stuck: the token is dead,
+  the order reads `awaiting_confirmation` until the hold lapses, and the agent
+  must re-quote and the human be asked again, even when the rail never saw the
+  request. That is D84's cost for a declined card, now also paid for a timeout.
+  One more code in `MerchantErrorCode` that a client must learn. The spent set
+  is in memory, like the rest of the store (D63). It does not cover two
+  concurrent confirmations, which both pass `requireConfirmable` before either
+  reaches the rail (T12b).
+
+## D127 · Replay means a request the merchant already acted on; the quote and the token are the guard — PROPOSED (T12a)
+
+- **Decision.** In this code a replay is a `place_order` or `confirm_order`
+  call resent after the merchant has already acted on it. Three paths, each
+  refused before the mandate check and before the rail:
+  `place_order` with a quote that already has an order is
+  `quote_already_ordered` (D64); `confirm_order` with a token whose order was
+  paid is `order_already_paid`, or `order_not_awaiting_confirmation` after a
+  decline (D84); with a token whose attempt the rail never answered,
+  `confirmation_token_spent` (D126). No nonce is added and the signed mandate is
+  unchanged: its ten fields are what is signed. The same mandate presented
+  against a new quote is not a replay. A mandate is reusable authority, and
+  its total cap and the ledger bound it (D44); `budget_exceeded` refuses it once
+  spent. `test/merchant/failure-cases.test.ts` runs each replay through the
+  server and asserts the audit log, the rail log and the ledger are what the
+  first call left.
+- **Alternative.** A nonce among the signed claims (the canonicaliser would
+  already cover it, D23). That changes the signed mandate, which this task may
+  not do, and it would make a mandate single use, which the cap and the ledger
+  exist to avoid. Or a request nonce argument on `place_order`. That is an
+  unsigned value the agent chooses, so it protects nothing the server-issued
+  quote id does not.
+- **Why.** The quote id and the confirmation token are server-issued, single
+  use, and already checked before any money moves, which is where D56 says
+  replay protection belongs. The one path where a replay still reached the rail
+  was the timeout, which D126 closes.
+- **Cost.** **A replay leaves no line in the audit log.** It is refused before
+  the mandate check, and D65 and D99 rule that such a refusal writes nothing.
+  PRD R10 and T12a's definition of done ask that replay, like the other cases,
+  "appears in the audit log". The tests assert the log is unchanged by a
+  replay, not that it records one. This is in PROGRESS.md as NEEDS-ANDREA.
+  Guards are per server instance (D44, D63): another stdio connection does not
+  know the quote, so it refuses with `quote_not_found` instead. A re-quote of the
+  same cart is a new quote and not refused here (D64's cost, T12b).
