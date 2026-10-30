@@ -6,8 +6,11 @@
  *   PaymentIntent in `requires_capture` (docs.stripe.com, "Place a hold on a
  *   payment method").
  * - `capture` of a `requires_capture` PaymentIntent answers it in
- *   `succeeded`; of anything else, an `invalid_request_error` (API reference,
- *   "Capture a PaymentIntent"). The code used for that error,
+ *   `succeeded`; of anything else, an error (API reference, "Capture a
+ *   PaymentIntent": "Returns an error if the PaymentIntent isn't
+ *   capturable"). It is raised here as an `invalid_request_error`, which
+ *   Stripe's error-handling page says covers a call "in the wrong state". The
+ *   code used for that error,
  *   `payment_intent_unexpected_state`, and `resource_missing` for an unknown
  *   id, are from Stripe's error-code table; which code a real capture returns
  *   is UNVERIFIED (PROGRESS.md).

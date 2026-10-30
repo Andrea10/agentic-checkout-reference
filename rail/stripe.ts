@@ -30,9 +30,11 @@
  *
  * The secret key is read from `STRIPE_SECRET_KEY` and nowhere else, and only
  * when no client is injected. A key that does not start with `sk_test_` is
- * refused before a client exists, so this rail cannot be pointed at live
- * money. Nothing it logs or throws carries the key: see
- * {@link StripeKeyError} and {@link StripeRailError}.
+ * refused before a client exists, so a rail that builds its own client cannot
+ * be pointed at live money. A client passed in is the caller's: the rail never
+ * sees its key. No log entry has a field a key could go in, and what the rail
+ * throws is built so as not to carry one: see {@link StripeKeyError} and
+ * {@link StripeRailError}.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -167,8 +169,8 @@ export function readStripeTestKey(env: Environment): string {
   if (key.startsWith(STRIPE_TEST_KEY_PREFIX) && key.length > STRIPE_TEST_KEY_PREFIX.length) {
     return key;
   }
-  // `_live_` anywhere in the prefix covers sk_live_ and rk_live_, the two live
-  // secret forms; anything else is simply not a test secret key.
+  // Two letters then `_live_` (sk_live_, rk_live_, pk_live_) is reported as a
+  // live key; anything else is simply not a test secret key.
   throw new StripeKeyError(/^[a-z]{2}_live_/.test(key) ? 'live' : 'not_test_secret');
 }
 
@@ -188,9 +190,8 @@ export type StripeRailFailure =
  * Stripe could not give an answer about the money (D50).
  *
  * Built fresh rather than rethrowing the SDK's error, and with no `cause`:
- * the SDK error is an object this rail does not control, and Stripe's
- * authentication message can quote part of the key. The message is scrubbed
- * of anything key-shaped. What survives is what a reader needs to look the
+ * the SDK error is an object this rail does not control, holding text from
+ * Stripe's response. The message is scrubbed of anything key-shaped. What survives is what a reader needs to look the
  * request up: the category, the call, Stripe's error code and request id.
  */
 export class StripeRailError extends Error {
@@ -237,7 +238,6 @@ const AMOUNT_CODES: ReadonlySet<string> = new Set([
   'amount_too_small',
   'amount_too_large',
   'invalid_charge_amount',
-  'parameter_invalid_integer',
 ]);
 
 function railDecline(code: DeclineCode, message: string): RailDecline {
@@ -273,7 +273,10 @@ function issuerCodeFor(error: StripeErrorLike): DeclineCode {
 /** Stripe's code and decline code, for a decline message. */
 function describe(error: StripeErrorLike): string {
   const parts = [error.code ?? 'no code'];
-  if (error.decline_code !== undefined) parts.push(`decline_code ${error.decline_code}`);
+  // The SDK sets an absent decline_code on a card error to ''.
+  if (error.decline_code !== undefined && error.decline_code !== '') {
+    parts.push(`decline_code ${error.decline_code}`);
+  }
   return `stripe ${error.rawType ?? 'error'}: ${parts.join(', ')}`;
 }
 
@@ -341,9 +344,9 @@ export class StripeRail implements Rail {
       case 'requires_capture':
         break;
       case 'requires_action':
-        // The issuer wants the cardholder to authenticate (3D Secure). No one
-        // is present to do it, so this is a refusal, and the PaymentIntent is
-        // left for Stripe to cancel: there is no cancel on `Rail`.
+        // The cardholder has to authenticate (3D Secure, for example). No one
+        // is present to do it, so this is a refusal. The PaymentIntent is left
+        // open: there is no cancel on `Rail`.
         return this.#refuseAuthorise(
           at,
           request,
@@ -490,9 +493,11 @@ export class StripeRail implements Rail {
       }
       if (error.code === 'payment_intent_unexpected_state') {
         const intent = error.payment_intent as StripePaymentIntentLike | undefined;
-        // Stripe sends the PaymentIntent with this error. Only one that has
-        // already succeeded was captured; any other state (cancelled after
-        // the hold expired, never authorised) is no capturable hold by that id.
+        // Stripe's error object carries the PaymentIntent on a request that
+        // involves one (API reference, Errors); whether it does on this error
+        // is UNVERIFIED (PROGRESS.md). Only one that has already succeeded was
+        // captured; any other state (cancelled after the hold expired, never
+        // authorised), or none, is no capturable hold by that id.
         const code: DeclineCode =
           intent?.status === 'succeeded' ? 'authorisation_already_captured' : 'authorisation_not_found';
         const status = intent === undefined ? 'unknown status' : `status ${intent.status}`;

@@ -2936,11 +2936,10 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
 - **Why.** The brief for T11 fixes the `Rail` interface. Stripe's
   documentation says the client generates the key and suggests "V4 UUIDs, or
   another random string with enough entropy" (Idempotent requests), which is
-  what the default does. A per-request key still makes the request safe to
-  resend inside one call.
+  what the default does.
 - **Cost.** It does not close the gap D56 names. `merchant/pay.ts` does not
-  retry a call whose answer it did not get, so nothing double-authorises
-  today. But if a caller ever retried `authorise` after a thrown connection
+  retry a call whose answer it did not get, so this repo does not reach that
+  case today. But if a caller ever retried `authorise` after a thrown connection
   error, the retry would carry a new key and could create a second hold. When
   a caller needs retry, the field on `AuthoriseRequest` is the fix (a
   non-breaking addition, D51).
@@ -2958,7 +2957,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   `requires_action`"), so Stripe turns the case into an error instead of a
   status. Or throw, because the payment is not finished.
 - **Why.** It is the case D53 declared `authentication_required` for: the
-  issuer wants SCA and nobody is present to give it. It is an answer about the
+  cardholder has to authenticate (SCA under PSD2, by 3D Secure) and nobody is
+  present to do it. It is an answer about the
   money (no hold was placed), so by D50 it is a result, not a throw. Mapping
   the status directly does not depend on which error code
   `error_on_requires_action` produces, which this task could not verify.
@@ -2978,8 +2978,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
     and `card_declined` for every other card error (generic decline, expired
     card, wrong CVC, a Radar block), with Stripe's code kept in the message.
   - `StripeInvalidRequestError` gives a **rail** decline when the rail can
-    name it: `amount_too_small`, `amount_too_large`, `invalid_charge_amount`
-    or `parameter_invalid_integer` give `amount_invalid`; `param: 'currency'`
+    name it: `amount_too_small`, `amount_too_large` or
+    `invalid_charge_amount` give `amount_invalid`; `param: 'currency'`
     gives `currency_unsupported`; on capture, `resource_missing` gives
     `authorisation_not_found`, and `payment_intent_unexpected_state` gives
     `authorisation_already_captured` when the PaymentIntent attached to the
@@ -3063,9 +3063,10 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   module initialises and `CLAUDECODE` or `CLAUDE_CODE_CHILD_SESSION` is set
   (`esm/stripe.esm.node.js`, `Stripe.initialize`). With a static import, every
   process that imports `rail/` (the merchant, the stdio server and the
-  stub-only demo) would print it under an agent harness like this factory's,
-  so the demo's output would differ from main's and a refused Stripe demo
-  would print two lines, not one. `test/rail/select.test.ts` sets
+  stub-only demo; the merchant loads `rail/` through `merchant/tools.ts`)
+  would print it under an agent harness like this factory's. The demo's
+  stderr would then differ from main's, and a refused Stripe demo would print
+  two lines, not one. `test/rail/select.test.ts` sets
   `CLAUDECODE=1` so that it fails if the SDK is ever loaded eagerly again.
 - **Cost.** One `await` per call, on a promise that resolves once. A broken
   SDK install shows up on the first call (as a thrown `StripeRailError`),
@@ -3114,11 +3115,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   clock would buy partial sameness and put a fake time next to a real
   PaymentIntent. Rewording the demo is outside this task's lines of
   `scripts/demo.ts`.
-- **Cost.** A Stripe run still prints three stub sentences that are then
-  false: "Nothing here touches real money: the payment rail is a stub.", the
-  heading "THE PAYMENT RAIL — a stub; no real money, no network" and
-  "Timestamps are the stub's synthetic epoch, not wall-clock time." (The first
-  two stay true about real money: test mode moves none.) T13 edits
-  `scripts/` and is the natural place to fix them. No Stripe demo run was
+- **Cost.** A Stripe run still prints three lines that describe the stub and
+  are then wrong: "Nothing here touches real money: the payment rail is a
+  stub.", the heading "THE PAYMENT RAIL — a stub; no real money, no network"
+  (a Stripe run uses the network), and "Timestamps are the stub’s synthetic
+  epoch, not wall-clock time." T13 edits `scripts/` and is the natural place
+  to fix them. No Stripe demo run was
   made in this task (no key, by the brief), so whether the whole demo
   completes against a test account is UNVERIFIED.

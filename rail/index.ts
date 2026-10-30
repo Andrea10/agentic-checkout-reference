@@ -13,7 +13,8 @@
  * Two implementations sit behind the one {@link Rail} interface:
  * {@link StubRail}, which never touches a payment system, and
  * {@link StripeRail}, which authorises and captures Stripe PaymentIntents in
- * test mode and refuses any key that is not a test-mode secret key (T11).
+ * test mode and, when it builds its own client, refuses any key that is not a
+ * test-mode secret key (T11).
  * {@link railFactoryFromEnvironment} picks one from `ACR_RAIL`; the stub is
  * the default.
  */

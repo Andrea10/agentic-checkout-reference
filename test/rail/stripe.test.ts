@@ -1,8 +1,8 @@
 /**
  * What the Stripe rail promises, against a fake Stripe client: the two calls
- * go to Stripe in the documented shape, every Stripe refusal comes back as a
- * decline with the right code and origin, every Stripe failure that is not a
- * refusal is thrown, and the log looks like the stub's.
+ * go to Stripe in the documented shape, each Stripe refusal the rail can name
+ * comes back as a decline with the right code and origin, each failure that
+ * is not a refusal is thrown, and the log looks like the stub's.
  *
  * No test here reaches the network; `forbidNetwork` fails any that tries.
  */
@@ -158,6 +158,16 @@ describe('StripeRail declines: the issuer said no', () => {
       expect(result.decline.message).toContain(code);
     },
   );
+
+  it('a card error with no decline_code says so plainly in the message', async () => {
+    const { rail } = stripeRail({
+      onCreate: () => {
+        throw cardError('expired_card');
+      },
+    });
+    const result = await rail.authorise(ORDER);
+    expect(!result.ok && result.decline.message).toBe('stripe card_error: expired_card');
+  });
 
   it('a PaymentIntent left in requires_action is an issuer decline, authentication_required', async () => {
     const { rail } = stripeRail({ onCreate: () => intentWithStatus('requires_action', 'pi_3ds') });
@@ -320,6 +330,15 @@ describe('StripeRail throws when Stripe gave no answer about the money (D50)', (
 
     await expect(attempt).rejects.toMatchObject({ failure: category, call: 'capture' });
     expect(entries).toEqual([]);
+  });
+
+  it('a parameter_invalid_integer error is not taken to be about the amount', async () => {
+    const { rail } = stripeRail({
+      onCreate: () => {
+        throw invalidRequest('parameter_invalid_integer', 'Invalid integer', { param: 'metadata' });
+      },
+    });
+    await expect(rail.authorise(ORDER)).rejects.toMatchObject({ failure: 'invalid_request' });
   });
 
   it('an invalid_request_error the rail cannot name is thrown, not guessed at', async () => {

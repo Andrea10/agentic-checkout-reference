@@ -1,9 +1,11 @@
 /**
  * Fails any test that tries to open a network connection.
  *
- * Every TCP or TLS socket Node opens goes through `net.Socket.prototype.connect`
- * (http, https and the SDK's own client included), and `fetch` is the other
- * way out, so those two are replaced with functions that throw. Call
+ * http, https and tls sockets are all `net.Socket`s and connect through
+ * `net.Socket.prototype.connect`; `fetch` is replaced as well, in case its
+ * client takes another path. Both are swapped for functions that throw.
+ * `test/rail/stripe-key.test.ts` checks that a real Stripe client is stopped
+ * by it. Call
  * `forbidNetwork()` at the top of a test file; it installs before the file's
  * tests and restores after them.
  */
