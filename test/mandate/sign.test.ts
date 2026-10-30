@@ -126,6 +126,23 @@ describe('verify, tampered mandate', () => {
     });
   });
 
+  it('rejects a mandate with a field added after signing (D23: every field present is signed)', () => {
+    const mandate = issue(claims, keys.privateKey);
+    const extended = { ...mandate, nonce: 'n-1' } as Mandate;
+
+    expect(verify(extended, keys.publicKey)).toEqual({
+      ok: false,
+      reason: 'signature_invalid',
+    });
+  });
+
+  it('ignores an added field whose value is undefined, which JSON cannot carry (D23 rule 4)', () => {
+    const mandate = issue(claims, keys.privateKey);
+    const extended = { ...mandate, nonce: undefined } as Mandate;
+
+    expect(verify(extended, keys.publicKey)).toEqual({ ok: true });
+  });
+
   it('rejects a signature lifted from a different mandate', () => {
     const other = issue({ ...claims, amount_cap_minor: 9999 }, keys.privateKey);
     const forged: Mandate = { ...claims, signature: other.signature };

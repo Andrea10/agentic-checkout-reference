@@ -479,6 +479,17 @@ describe('requireConfirmable (D84)', () => {
     );
   });
 
+  it('refuses a spent token while its order still reads awaiting_confirmation (D126)', () => {
+    const store = testStore();
+    store.holdForConfirmation(facts(), TERMS);
+    store.spendToken('confirm_000001');
+
+    expect(codeOf(() => store.requireConfirmable('confirm_000001'))).toBe(
+      'confirmation_token_spent',
+    );
+    expect(store.get('order_000001')?.status).toBe('awaiting_confirmation');
+  });
+
   it('refuses once the hold has lapsed, naming the window (D82)', () => {
     let now = FROZEN;
     const store = new OrderStore({
