@@ -9,12 +9,15 @@
  *
  * The loop ends in exactly four ways, and {@link RunOutcome} names them:
  *
- * - `ordered` — `place_order` was approved.
+ * - `ordered` — `place_order` came back as a completed order: the mandate
+ *   covered it and the merchant took the payment in that one call, answering
+ *   `paid` (D88).
  * - `awaiting_confirmation` — the merchant is holding the order for a human.
  *   The token is handed back and **nothing else happens** (D74).
  * - `refused` — a tool said no. The run stops at the first refusal, naming
  *   the step that earned it (D73). It is returned, not thrown: a refusal is
- *   the mandate layer working, which is the thing this repository is about.
+ *   the merchant deciding something about this purchase — the mandate layer
+ *   saying no, most visibly, which is the thing this repository is about.
  * - `stopped` — the planner said to stop, or the step budget ran out.
  *
  * `place_order` is terminal whichever way it answers: the runner never asks

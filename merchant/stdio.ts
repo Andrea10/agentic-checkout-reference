@@ -12,7 +12,10 @@
  * orders.
  *
  * Run it directly with `npx tsx merchant/stdio.ts`, or point an MCP client at
- * that command. T09 wires it into `npm run demo`.
+ * that command. `npm run demo` does not start it: the demo hosts the merchant
+ * in its own process over the in-memory transport (D100). This entry point is
+ * exercised by `scripts/stdio-smoke.test.ts`, which spawns it with an issuer
+ * key in its environment and places an order (D105).
  */
 
 import { serveStdio } from '@modelcontextprotocol/server/stdio';

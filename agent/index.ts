@@ -3,7 +3,15 @@
  * calls.
  *
  * ```ts
- * const merchant = await connectStdio({ command: 'npx', args: ['tsx', 'merchant/stdio.ts'] });
+ * // The merchant takes orders only with an issuer key in its environment
+ * // (D60), and `connectStdio` passes the child nothing beyond the SDK's
+ * // default allowlist (D105), so the transport is built here with the key
+ * // that verifies `mandate`.
+ * const merchant = await connect(new StdioClientTransport({
+ *   command: 'npx',
+ *   args: ['tsx', 'merchant/stdio.ts'],
+ *   env: { ...getDefaultEnvironment(), ACR_MANDATE_PUBLIC_KEY: exportPublicKey(publicKey) },
+ * }));
  * console.log(merchant.protocolVersion);   // '2026-07-28'
  *
  * const result = await runPlan({
@@ -15,10 +23,16 @@
  * switch (result.outcome.kind) {
  *   case 'ordered':                 // paid
  *   case 'awaiting_confirmation':   // a human has to say yes; the token is here
- *   case 'refused':                 // the mandate did not cover it, with reasons
+ *   case 'refused':                 // the merchant said no; a mandate refusal lists its reasons
  *   case 'stopped':                 // the plan ended without an order
  * }
  * ```
+ *
+ * `StdioClientTransport` and `getDefaultEnvironment` come from
+ * `@modelcontextprotocol/client/stdio`, `exportPublicKey` from `mandate/`.
+ * With `connectStdio({ command: 'npx', args: ['tsx', 'merchant/stdio.ts'] })`
+ * instead, the same plan ends `refused` at `place_order` with
+ * `merchant_misconfigured`.
  *
  * The three seams, and the reason for each:
  *
