@@ -46,3 +46,4 @@ T10 PR #23 opened 2026-10-28T21:57:57Z
 T10 review round 1 fixed: 7 reviewer findings confirmed against the AP2 pages and the code, plus 3 more found by sweep; D116 PROPOSED amends D106 (two mandate fields differ, not one); UNVERIFIED down from 3 to 1 2026-10-28T23:42:43Z
 T10 fresh clone of task/T10 at f8d4d70: npm ci, npm install, test (573), lint, build, typecheck and demo all exit 0; two invocations byte-identical; index 116 rows cross-checked; all 3 diagrams re-render 2026-10-28T23:42:43Z
 chore post-T10 PR #24 opened 2026-10-29T23:57:38Z
+T10b claimed 2026-10-30T00:09:23Z

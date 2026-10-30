@@ -22,7 +22,10 @@
  * protocol messages: a stray line on stdout corrupts the conversation. Nor
  * does anything here go through MCP's own Logging utility, which revision
  * 2026-07-28 deprecates (SEP-2577); the migration path that revision states
- * is "Log to `stderr` for stdio transports", which is what the demo does.
+ * is "Log to `stderr` for stdio transports". The demo has no stdio
+ * transport: it reaches the merchant over an in-memory transport, so no part
+ * of its stdout carries protocol messages, and it prints the log to stdout
+ * with the rest of its output (D102).
  */
 
 import type { PolicyDecision, PolicyOutcome, PolicyRefusalReason } from './decision.js';
@@ -237,8 +240,9 @@ export class AuditLog {
    * Write the log to `stream`, one line per event, oldest first.
    *
    * The stream is a parameter and not a default, so nothing in this package
-   * can write to stdout by accident. The demo passes `process.stderr`; a test
-   * passes a collector.
+   * can write to stdout by accident. The demo passes `process.stdout`, through
+   * an indenting adapter, on purpose: nothing in its process speaks MCP over
+   * stdio (D102). A test passes a collector.
    *
    * Amounts are printed in minor units (`2500 GBP` is twenty-five pounds).
    */

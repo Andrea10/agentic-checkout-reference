@@ -8,16 +8,20 @@
  *
  * It now runs against the real tool: `merchant/place-order.ts` shipped in
  * T07a, and `test/agent/order.test.ts` drives this function against it as
- * well as against a stub. Nothing is *paid* here — the merchant's own
- * documentation is explicit that an approved order is approved and not paid,
- * and the rail call belongs to T07b's `confirm_order`.
+ * well as against a stub. An order the mandate covers outright is *paid*
+ * inside this one call: since T07b the merchant authorises, captures and
+ * records it before it answers, and its body says `paid` (D88). Only an order
+ * held for a human waits for `confirm_order`, which this agent never calls
+ * (D74).
  *
  * ## The three answers
  *
  * `place_order` has three, and the type says so:
  *
- * - **approved** — the mandate covered it. The order is returned. The status
- *   word is `approved`, from the merchant's `ORDER_STATUSES` (D62).
+ * - **approved** — the mandate covered it, and the merchant took the money in
+ *   the same call. The order is returned. `approved` is the agent's own
+ *   outcome word, not the merchant's: the merchant's body says `paid`, and
+ *   that word is carried through on the order's `status` (D88).
  * - **awaiting_confirmation** — the amount is above the mandate's
  *   `human_confirm_above_minor`, so the merchant is holding the order and has
  *   handed back a `confirmation_token`. **The agent stops here** (D74). It
@@ -46,7 +50,11 @@ export const PLACE_ORDER_TOOL = 'place_order';
 /** The status the merchant uses when it is holding an order for a human (D74). */
 export const AWAITING_CONFIRMATION = 'awaiting_confirmation';
 
-/** The status the merchant uses when the mandate covered the order (D62). */
+/**
+ * The agent's outcome word when the mandate covered the order. Not a
+ * merchant status: the merchant answers `paid` there, and `approved` left the
+ * wire (D88).
+ */
 export const APPROVED = 'approved';
 
 /**
@@ -93,9 +101,10 @@ const heldSchema = z.object({
 /**
  * The approved-order body.
  *
- * `status` is read as a plain string rather than the literal `approved`, so
- * that T07b's paid path — whatever word it uses — arrives as an approved
- * order carrying its own status rather than as an unreadable body.
+ * `status` is read as a plain string rather than a literal, so the merchant's
+ * own word for a completed order arrives on the order as it was sent. Since
+ * T07b that word is `paid` (D88), and this schema did not have to change when
+ * it stopped being `approved`.
  */
 const approvedSchema = z.object({
   order_id: z.string(),
