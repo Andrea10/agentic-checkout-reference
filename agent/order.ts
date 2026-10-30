@@ -31,9 +31,16 @@
  *   confirms its own order has removed the control it was built to respect.
  *   The token is returned to whoever started the agent, and the decision is
  *   theirs.
- * - **refused** — one or more mandate checks failed. The refusal carries the
- *   list (D73), so the caller reads every reason at once rather than the
- *   first.
+ * - **refused** — the merchant said no, for any reason: every `isError`
+ *   answer becomes a refusal (D73). From `place_order` that includes
+ *   `mandate_refused`; `quote_not_found`, `quote_expired`, `quote_stale` and
+ *   `quote_already_ordered`; `product_not_found` and `insufficient_stock`;
+ *   `payment_declined`, `capture_failed` and `rail_unavailable`;
+ *   `merchant_misconfigured` when the merchant has no trusted issuer (D60);
+ *   and `internal_error`. A body that is not the merchant's envelope arrives
+ *   as `tool_error` (D78). Only `mandate_refused` carries a list of reasons
+ *   — every failed mandate check (D66) — so the caller reads them all at
+ *   once rather than the first.
  */
 
 import * as z from 'zod';
@@ -61,9 +68,9 @@ export const APPROVED = 'approved';
  * An order the merchant accepted.
  *
  * `order_id` and `status` are what the shipped `placeOrderOutput` carries
- * besides the confirmation token; the whole body travels with them so a
- * caller — and T09's demo — can print anything T07b adds without this file
- * changing (D77).
+ * besides the confirmation token. T07b added no field to the paid body (D88
+ * keeps it at D62's two); the whole body travels with them anyway, so a
+ * field a merchant adds reaches the caller without this file changing (D77).
  */
 export interface PlacedOrder {
   readonly order_id: string;

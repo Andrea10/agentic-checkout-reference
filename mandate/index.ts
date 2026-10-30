@@ -16,7 +16,7 @@
  *   amount_minor: 2500,
  *   currency: 'GBP',
  * });
- * policy.audit.print(process.stderr);         // never stdout: see audit.ts
+ * policy.audit.print(process.stderr);         // as a stdio server must: see audit.ts
  * ```
  *
  * `verify()` is the signature check and nothing more; `checkMandate()` is the
