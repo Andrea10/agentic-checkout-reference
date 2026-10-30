@@ -332,8 +332,9 @@ export class OrderStore {
    *
    * One kind of attempt reaches the rail without moving the order: an `authorise`
    * that threw leaves it `awaiting_confirmation` (D85). Its token is spent
-   * all the same, so a replay cannot ask the rail for a second hold while the
-   * first one's fate is unknown (D126).
+   * all the same, so a later confirmation with it is refused before the rail
+   * while the first hold's fate is unknown (D126). Two concurrent
+   * confirmations both pass this check before either reaches the rail (T12b).
    *
    * @throws MerchantError `confirmation_token_unknown`, `order_already_paid`,
    * `order_not_awaiting_confirmation`, `confirmation_token_spent` or
@@ -381,8 +382,9 @@ export class OrderStore {
    * Spends a held order's token without moving the order.
    *
    * For the one kind of attempt that reaches the rail and leaves the order
-   * where it was: an `authorise` that threw (D85). The status is not touched, because
-   * nothing is known about the money; only the token is used up (D126).
+   * where it was: an `authorise` that threw (D85). The status is not touched,
+   * because nothing is known about the money; only the token is used up
+   * (D126).
    */
   spendToken(token: string): void {
     this.#spentTokens.add(token);
