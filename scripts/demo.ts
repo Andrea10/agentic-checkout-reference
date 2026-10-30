@@ -83,7 +83,13 @@ import {
   sequentialQuoteIds,
   type OrderStatus,
 } from '../merchant/index.js';
-import { StubRail, formatRailLogEntry, type RailLogEntry } from '../rail/index.js';
+import {
+  formatRailLogEntry,
+  railFactoryFromEnvironment,
+  stubRailFactory,
+  type RailFactory,
+  type RailLogEntry,
+} from '../rail/index.js';
 
 // --- the cast -------------------------------------------------------------
 //
@@ -333,7 +339,7 @@ interface DemoMerchant {
  * than handing the key object over directly. The policy is then built with a
  * fixed clock, which `policyFor` cannot do.
  */
-function startMerchant(encodedPublicKey: string): DemoMerchant {
+function startMerchant(encodedPublicKey: string, railFactory: RailFactory): DemoMerchant {
   const config = configFromEnvironment({
     [MERCHANT_ID_ENV]: MERCHANT,
     [ISSUER_PUBLIC_KEY_ENV]: encodedPublicKey,
@@ -353,10 +359,8 @@ function startMerchant(encodedPublicKey: string): DemoMerchant {
   });
 
   const railLog: RailLogEntry[] = [];
-  const rail = new StubRail({
-    log: (entry) => {
-      railLog.push(entry);
-    },
+  const rail = railFactory((entry) => {
+    railLog.push(entry);
   });
 
   const state = createMerchantState({
@@ -629,9 +633,14 @@ async function shop(
  * This is the happy path and the one a reader should be able to follow
  * without knowing anything about MCP.
  */
-async function runOne(p: Printer, keys: MandateKeyPair, encodedPublicKey: string): Promise<RunReport> {
+async function runOne(
+  p: Printer,
+  keys: MandateKeyPair,
+  encodedPublicKey: string,
+  railFactory: RailFactory,
+): Promise<RunReport> {
   const mandate = issue(demoClaims(RUN_ONE), keys.privateKey);
-  const merchant = startMerchant(encodedPublicKey);
+  const merchant = startMerchant(encodedPublicKey, railFactory);
 
   p.run('RUN 1 — the mandate covers the basket, so the agent just buys');
   describeMandate(p, mandate);
@@ -678,9 +687,14 @@ async function runOne(p: Printer, keys: MandateKeyPair, encodedPublicKey: string
  * on the principal's hat: a second MCP client, which has never seen the
  * mandate, calls `confirm_order` with the token and nothing else.
  */
-async function runTwo(p: Printer, keys: MandateKeyPair, encodedPublicKey: string): Promise<RunReport> {
+async function runTwo(
+  p: Printer,
+  keys: MandateKeyPair,
+  encodedPublicKey: string,
+  railFactory: RailFactory,
+): Promise<RunReport> {
   const mandate = issue(demoClaims(RUN_TWO), keys.privateKey);
-  const merchant = startMerchant(encodedPublicKey);
+  const merchant = startMerchant(encodedPublicKey, railFactory);
 
   p.run('RUN 2 — the same basket, a lower threshold, so a human must confirm');
   describeMandate(p, mandate);
@@ -789,6 +803,8 @@ export interface DemoOptions {
    * that neither half of it reaches the output.
    */
   readonly keys?: MandateKeyPair;
+  /** Builds each run's rail. Default: the stub, which keeps the output byte-identical. */
+  readonly rail?: RailFactory;
 }
 
 /**
@@ -804,6 +820,7 @@ export async function runDemo(stream: OutputStream, options: DemoOptions = {}): 
   const p = new Printer(stream);
   const keys = options.keys ?? generateMandateKeyPair();
   const encodedPublicKey = exportPublicKey(keys.publicKey);
+  const railFactory = options.rail ?? stubRailFactory;
 
   p.title('agentic-checkout-reference — an agent buys something, twice');
   p.line();
@@ -820,8 +837,8 @@ export async function runDemo(stream: OutputStream, options: DemoOptions = {}): 
   p.field('ids', 'sequential, so two runs print the same text');
   p.field('keys', 'generated in memory; no private key is ever printed');
 
-  const one = await runOne(p, keys, encodedPublicKey);
-  const two = await runTwo(p, keys, encodedPublicKey);
+  const one = await runOne(p, keys, encodedPublicKey, railFactory);
+  const two = await runTwo(p, keys, encodedPublicKey, railFactory);
 
   p.line();
   p.rule('=');
@@ -845,5 +862,15 @@ function isRunDirectly(): boolean {
 }
 
 if (isRunDirectly()) {
-  await runDemo(process.stdout);
+  // ACR_RAIL picks the rail (rail/select.ts). A refusal — an unknown name, or
+  // stripe without a test-mode key — is one line on stderr before anything
+  // else is printed.
+  let rail: RailFactory;
+  try {
+    rail = railFactoryFromEnvironment(process.env);
+  } catch (refused) {
+    process.stderr.write(`demo: ${refused instanceof Error ? refused.message : String(refused)}\n`);
+    process.exit(1);
+  }
+  await runDemo(process.stdout, { rail });
 }
