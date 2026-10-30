@@ -232,7 +232,7 @@ export class OrderStore {
   readonly #orders = new Map<string, Order>();
   readonly #byQuote = new Map<string, string>();
   readonly #byToken = new Map<string, string>();
-  /** Tokens whose attempt reached the rail and got no answer (D85, D126). */
+  /** Tokens whose attempt reached the rail and `authorise` threw (D85, D126). */
   readonly #spentTokens = new Set<string>();
   readonly #nextId: OrderIdFactory;
   readonly #nextToken: ConfirmationTokenFactory;
@@ -330,7 +330,7 @@ export class OrderStore {
    * confirmation is told what happened to its order instead of being told the
    * token does not exist — D39's reasoning about stale quotes, one level up.
    *
-   * One attempt reaches the rail without moving the order: an `authorise`
+   * One kind of attempt reaches the rail without moving the order: an `authorise`
    * that threw leaves it `awaiting_confirmation` (D85). Its token is spent
    * all the same, so a replay cannot ask the rail for a second hold while the
    * first one's fate is unknown (D126).
@@ -380,8 +380,8 @@ export class OrderStore {
   /**
    * Spends a held order's token without moving the order.
    *
-   * For the one attempt that reaches the rail and leaves the order where it
-   * was: an `authorise` that threw (D85). The status is not touched, because
+   * For the one kind of attempt that reaches the rail and leaves the order
+   * where it was: an `authorise` that threw (D85). The status is not touched, because
    * nothing is known about the money; only the token is used up (D126).
    */
   spendToken(token: string): void {

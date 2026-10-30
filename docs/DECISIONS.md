@@ -3132,7 +3132,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   that token is refused with a new code, `confirmation_token_spent`, which
   `requireConfirmable` checks after the status checks and before the hold's
   expiry. Nothing else changes: the order stays `awaiting_confirmation`, the
-  ledger is untouched and the log gets no new line (D85, D99). The direct path
+  ledger is untouched, the first attempt still writes its `rail_unavailable`
+  line and the refused replay writes none (D85, D99). The direct path
   needs nothing: its quote is already used (D64).
 - **Alternative.** Leave it, as D85 did: the token stays live and a replay
   calls `authorise` again. Or spend the token before the first `await` in
@@ -3143,15 +3144,16 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
 - **Why.** D84's rule is that the token is spent by the attempt that reaches
   the rail, and an `authorise` that threw has reached it: the hold may exist.
   Before this change a replay of the same token asked the rail for a second
-  hold while the first one's fate was unknown, which is the double-authorise
-  D56's and D85's costs both name and hand to T12. Spending the token without
+  hold while the first one's fate was unknown: the double-authorise D56's
+  and D85's costs both name, and D56 leaves to T12. Spending the token without
   moving the order keeps D85's rule that no status is written on a guess. A new
   code rather than `order_not_awaiting_confirmation`, because the order *is*
   awaiting confirmation and a message that said otherwise would be false. The
-  mark is written synchronously in the `catch`, so concurrency is left exactly
-  as it was for T12b.
+  mark is written in the `catch`, after `authorise` has thrown, so two
+  concurrent confirmations still both reach the rail, as before (T12b).
 - **Cost.** An order whose `authorise` threw is now stuck: the token is dead,
-  the order reads `awaiting_confirmation` until the hold lapses, and the agent
+  the order reads `awaiting_confirmation` for the life of the process (no
+  transition moves it, and the spent check runs before the expiry check), and the agent
   must re-quote and the human be asked again, even when the rail never saw the
   request. That is D84's cost for a declined card, now also paid for a timeout.
   One more code in `MerchantErrorCode` that a client must learn. The spent set
@@ -3169,12 +3171,12 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   paid is `order_already_paid`, or `order_not_awaiting_confirmation` after a
   decline (D84); with a token whose attempt the rail never answered,
   `confirmation_token_spent` (D126). No nonce is added and the signed mandate is
-  unchanged: its ten fields are what is signed. The same mandate presented
+  unchanged: `issue()` signs its ten fields as before. The same mandate presented
   against a new quote is not a replay. A mandate is reusable authority, and
   its total cap and the ledger bound it (D44); `budget_exceeded` refuses it once
   spent. `test/merchant/failure-cases.test.ts` runs each replay through the
-  server and asserts the audit log, the rail log and the ledger are what the
-  first call left.
+  server and asserts that the printed audit log, the rail's calls and the
+  ledger are what the first call left.
 - **Alternative.** A nonce among the signed claims (the canonicaliser would
   already cover it, D23). That changes the signed mandate, which this task may
   not do, and it would make a mandate single use, which the cap and the ledger
