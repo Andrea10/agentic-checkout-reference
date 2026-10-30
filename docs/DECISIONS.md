@@ -2886,3 +2886,240 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   is ever touched again, giving both runs one `mandate_id` would make D106
   true as written and delete this entry, at the price of an audit log whose
   two runs are harder to tell apart.
+
+## D117 · An authorisation is a confirmed, manual-capture PaymentIntent — PROPOSED (T11)
+
+- **Decision.** `StripeRail.authorise` makes one call, `paymentIntents.create`,
+  with `amount` (the request's minor units), `currency` (lowercased),
+  `capture_method: 'manual'`, `confirm: true`, `payment_method` (a Stripe test
+  PaymentMethod, `pm_card_visa` by default), `automatic_payment_methods:
+  { enabled: true, allow_redirects: 'never' }` and `metadata: { order_ref }`.
+  A PaymentIntent that comes back in `requires_capture` is the hold, and its
+  id is the `authorisation_id`. `capture` calls `paymentIntents.capture(id)`
+  with no amount, so Stripe captures the full `amount_capturable` (D52); a
+  PaymentIntent that comes back `succeeded` is the capture. `order_ref`,
+  `amount_minor` and `currency` on the `Capture` are read from the captured
+  PaymentIntent (`metadata.order_ref`, `amount_received`, `currency`
+  uppercased), because the capture request carries only the id (D52).
+  Timestamps come from the rail's injected clock, wall-clock by default, not
+  from Stripe's `created`.
+- **Alternative.** Create the PaymentIntent and confirm it in a second call,
+  which is closer to a browser flow; or keep a local map from authorisation id
+  to the request, as `StubRail` does, instead of reading the PaymentIntent
+  back.
+- **Why.** Create-and-confirm in one call is what Stripe's API reference
+  describes for `confirm=true` ("equivalent to creating and confirming the
+  PaymentIntent in the same call"), and one call means one place a network
+  failure can happen. `allow_redirects: 'never'` is what makes a server-side
+  confirmation possible without a `return_url` (API reference,
+  `automatic_payment_methods.allow_redirects`). Reading the captured
+  PaymentIntent back keeps the rail stateless, so a capture still works after
+  a restart, which a local map would not.
+- **Cost.** The authorisation's `amount_minor` and `currency` echo the request
+  rather than the PaymentIntent, so a Stripe-side change of amount would not
+  be noticed at authorise time. A PaymentIntent created outside this rail has
+  no `metadata.order_ref`, and its capture reports an empty `order_ref`.
+  Stripe's own timestamps are not used, so the log's times are when this
+  process saw the answer.
+
+## D118 · Idempotency keys: a fresh random key per request, never `order_ref` (D56) — PROPOSED (T11)
+
+- **Decision.** Every `create` and `capture` request sends Stripe an
+  `idempotencyKey` from an injected factory, `randomUUID` by default. The key
+  is never derived from `order_ref`, which stays a reference and nothing more
+  (D56). `AuthoriseRequest` is not given an `idempotency_key` field; the
+  `Rail` interface is unchanged.
+- **Alternative.** D56's own suggestion: an optional `idempotency_key` on
+  `AuthoriseRequest`, supplied by the merchant, so that a caller retrying after
+  a timeout sends the same key and gets the first answer back. Or derive the
+  key from `order_ref`, which D56 rules out.
+- **Why.** The brief for T11 fixes the `Rail` interface. Stripe's
+  documentation says the client generates the key and suggests "V4 UUIDs, or
+  another random string with enough entropy" (Idempotent requests), which is
+  what the default does.
+- **Cost.** It does not close the gap D56 names. `merchant/pay.ts` does not
+  retry a call whose answer it did not get, so this repo does not reach that
+  case today. But if a caller ever retried `authorise` after a thrown connection
+  error, the retry would carry a new key and could create a second hold. When
+  a caller needs retry, the field on `AuthoriseRequest` is the fix (a
+  non-breaking addition, D51).
+
+## D119 · `requires_action` is an issuer decline, `authentication_required` — PROPOSED (T11)
+
+- **Decision.** A PaymentIntent that comes back from create-and-confirm in
+  `requires_action` (Stripe's status when "the payment requires additional
+  actions, such as authenticating with 3D Secure") is returned as
+  `{ code: 'authentication_required', origin: 'issuer' }`. A card error whose
+  `code` or `decline_code` is `authentication_required` maps the same way. The
+  PaymentIntent is left as it is: `Rail` has no cancel.
+- **Alternative.** Pass `error_on_requires_action: true` (API reference:
+  "fail the payment attempt if the PaymentIntent transitions into
+  `requires_action`"), so Stripe turns the case into an error instead of a
+  status. Or throw, because the payment is not finished.
+- **Why.** It is the case D53 declared `authentication_required` for: the
+  cardholder has to authenticate (SCA under PSD2, by 3D Secure) and nobody is
+  present to do it. It is an answer about the
+  money (no hold was placed), so by D50 it is a result, not a throw. Mapping
+  the status directly does not depend on which error code
+  `error_on_requires_action` produces, which this task could not verify.
+- **Cost.** An abandoned PaymentIntent in `requires_action` is left on the
+  Stripe account. Whether Stripe's test PaymentMethod
+  `pm_card_authenticationRequired` gives this status or a card error on
+  create-and-confirm is UNVERIFIED (PROGRESS.md); both paths are mapped and
+  tested against the fake client.
+
+## D120 · How each Stripe failure is classified, and the cases D50 does not settle — PROPOSED (T11)
+
+- **Decision.** The SDK's error is recognised by its `type`, the SDK class
+  name (Stripe's Node error-handling page: "`e.type` identifies the SDK error
+  class").
+  - `StripeCardError` gives an **issuer** decline: `insufficient_funds` or
+    `authentication_required` when Stripe's `code` or `decline_code` says so,
+    and `card_declined` for every other card error (generic decline, expired
+    card, wrong CVC, a Radar block), with Stripe's code kept in the message.
+  - `StripeInvalidRequestError` gives a **rail** decline when the rail can
+    name it: `amount_too_small`, `amount_too_large` or
+    `invalid_charge_amount` give `amount_invalid`; `param: 'currency'`
+    gives `currency_unsupported`; on capture, `resource_missing` gives
+    `authorisation_not_found`, and `payment_intent_unexpected_state` gives
+    `authorisation_already_captured` when the PaymentIntent attached to the
+    error is `succeeded` and `authorisation_not_found` otherwise.
+  - An `invalid_request_error` the rail cannot name, a connection,
+    authentication, permission, rate-limit, idempotency or API error, a
+    PaymentIntent in a status the rail did not expect, and anything that is
+    not a Stripe error at all are **thrown** as `StripeRailError`, with a
+    `failure` category, the call, Stripe's code and request id.
+  - `StripeRailError` is built fresh, with no `cause`, and its message has
+    anything shaped like a Stripe key replaced.
+  - The request is checked locally first, with `StubRail`'s three rules and
+    messages, so an empty `order_ref`, a bad amount or an unsupported
+    currency never reaches Stripe.
+- **Alternative.** Follow D50's sentence to the letter, so every
+  `invalid_request_error` becomes a decline, choosing the nearest of the eight
+  codes when none fits. Or rethrow the SDK's own error objects unchanged.
+- **Why.** `DeclineCode` is closed (D53) and none of its eight codes means
+  "Stripe rejected a parameter this rail did not expect". A nearest-code guess
+  would put a wrong reason into the audit log, so the rail throws instead.
+  Throwing is also the conservative direction: the merchant then records
+  nothing as paid or declined (D85). A fresh error with no `cause` is the only
+  way to promise that a thrown object never carries the key, because the
+  SDK's error is not this repo's to control.
+- **Cost.** This departs from D50's "`invalid_request_error` become[s] [a]
+  decline" for the unnamed cases. If Stripe adds a parameter error the rail
+  should have declined, it shows up as `rail_unavailable` until it is mapped.
+  The error loses the SDK's stack and raw response; the request id is kept so
+  the request can be found in the Stripe dashboard. Which code a second
+  capture returns, and whether the PaymentIntent is attached to that error,
+  are UNVERIFIED (PROGRESS.md). With no PaymentIntent attached, a double
+  capture would be reported as `authorisation_not_found`.
+
+## D121 · The Stripe rail accepts GBP only by default, uppercase in, lowercase out — PROPOSED (T11)
+
+- **Decision.** `STRIPE_RAIL_CURRENCIES` is `['GBP']`, the same as the stub's,
+  and can be overridden with the `currencies` option. The rail accepts the
+  repo's uppercase ISO 4217 codes only, refusing `gbp` with
+  `currency_unsupported` as the stub does, and sends Stripe the lowercase code
+  it asks for ("Three-letter ISO currency code, in lowercase"). `Capture`
+  reports the currency uppercased again.
+- **Alternative.** Accept any currency and let Stripe refuse what it cannot
+  take, or accept either case on input.
+- **Why.** D16 prices everything in GBP, and nothing else in the repo can
+  produce another currency. Keeping the case conversion at the one boundary
+  where Stripe's convention differs means no other layer has to know about it.
+- **Cost.** A second currency needs a change of option, and D16's cost
+  (a real money type, currency checks at every boundary) still applies.
+  Stripe's per-currency minimum charge amounts are not checked locally; an
+  amount below the minimum comes back from Stripe as `amount_too_small` and
+  becomes `amount_invalid`.
+
+## D122 · `stripe` is pinned at exactly 23.1.0 — PROPOSED (T11)
+
+- **Decision.** `"stripe": "23.1.0"` in `dependencies`, exact, per D02.
+- **Alternative.** 23.0.1, the previous patch release (22 Oct). Or the 22.x
+  line.
+- **Why.** On 2026-10-30, `npm view stripe` reports 23.1.0 as `latest`, MIT
+  licence, `engines.node >=20` (inside this repo's `>=22.13.0`), no runtime
+  dependencies, and its own types for the ESM entry point
+  (`esm/stripe.esm.node.d.ts`). It typechecks and lints under this repo's
+  strict `nodenext` settings with no workaround. Its changelog says it pins
+  API version `2026-10-28.endive`, which is the `Stripe-Version` in the
+  PaymentIntent create and capture examples this task read, so the code and
+  the documentation it was checked against describe the same API version.
+- **Cost.** It was published on 29 Oct, a day before this task, so it has had
+  little time in the field. Its lockfile entry declares an optional peer on
+  `@types/node`, which changed the flags on two existing lockfile entries
+  (`@types/node` and `undici-types` went from `dev` to `devOptional`), with no
+  change to their versions. A major SDK upgrade also changes the API version,
+  so it needs re-verifying against the docs, not just a version bump.
+
+## D123 · The Stripe SDK is loaded only when a Stripe client is built — PROPOSED (T11)
+
+- **Decision.** `rail/stripe.ts` imports `stripe` for types only. The real
+  client is created with a dynamic `import('stripe')` inside the constructor's
+  no-client branch, after the key check, and the first call awaits it. Stripe
+  errors are recognised by their `type` field, not `instanceof`.
+- **Alternative.** A static `import Stripe from 'stripe'`, the usual form.
+- **Why.** stripe@23.1.0 writes `<claude-code-hint … />` to stderr when the
+  module initialises and `CLAUDECODE` or `CLAUDE_CODE_CHILD_SESSION` is set
+  (`esm/stripe.esm.node.js`, `Stripe.initialize`). With a static import, every
+  process that imports `rail/` (the merchant, the stdio server and the
+  stub-only demo; the merchant loads `rail/` through `merchant/tools.ts`)
+  would print it under an agent harness like this factory's. The demo's
+  stderr would then differ from main's, and a refused Stripe demo would print
+  two lines, not one. `test/rail/select.test.ts` sets
+  `CLAUDECODE=1` so that it fails if the SDK is ever loaded eagerly again.
+- **Cost.** One `await` per call, on a promise that resolves once. A broken
+  SDK install shows up on the first call (as a thrown `StripeRailError`),
+  not at construction. A future SDK version that adds more load-time output
+  under other variables would need the same test extended.
+
+## D124 · `ACR_RAIL` picks the rail; the demo threads a rail factory through — PROPOSED (T11)
+
+- **Decision.** `railFactoryFromEnvironment(env)` in `rail/select.ts` returns
+  a `(log) => Rail` factory: the stub for `ACR_RAIL` unset, empty or `stub`;
+  the Stripe rail for `stripe`, with the key checked at that moment. Any other
+  value is refused, without the value being echoed. `scripts/demo.ts`
+  calls it once at the entry point. On a refusal it writes
+  `demo: <message>` to stderr and exits 1 before anything else is printed.
+  Otherwise it passes the factory to `runDemo` through a new `rail` option,
+  which `runOne`, `runTwo` and `startMerchant` hand down to where the stub was
+  constructed. With no option, `runDemo` uses `stubRailFactory`, which builds
+  exactly the `new StubRail({ log })` it built before.
+- **Alternative.** Read `process.env` inside `startMerchant`, which changes
+  fewer lines but means the refusal comes after the demo's title has printed.
+  Or fall back to the stub on an unknown value.
+- **Why.** The brief requires a refused Stripe run to print one line and
+  nothing else, so the choice has to be made before the first line. A factory
+  rather than a rail because each run builds its own merchant with its own
+  log sink. Refusing unknown names stops a typo from producing a stub run
+  that the person thinks was a Stripe run.
+- **Cost.** The "rail-selection lines" of `scripts/demo.ts` are more than a
+  single line: the import, the `DemoOptions.rail` field, the default, two run
+  signatures, `startMerchant`'s signature and construction, and the entry
+  point. They are listed in the PR. A demo test that changes only the rail
+  has one more option to know about.
+
+## D125 · A Stripe test-mode demo run is not byte-identical, and still calls its rail a stub — PROPOSED (T11)
+
+- **Decision.** `ACR_RAIL=stripe STRIPE_SECRET_KEY=sk_test_... npm run demo`
+  runs the same two orders through Stripe test mode. Its rail lines show
+  `rail=stripe`, PaymentIntent ids (`auth=pi_...`) in place of `auth_000001`,
+  and wall-clock timestamps, so two runs never match each other or the stub
+  transcript. The byte-identical promise (D103) is kept for the default run
+  only, and was checked: four runs, two on main and two on this branch, have
+  one sha256.
+- **Alternative.** Inject the demo's frozen clock into the Stripe rail too,
+  so only the ids differ. Or rewrite the demo's rail wording when Stripe is
+  chosen.
+- **Why.** The ids are Stripe's and cannot be made deterministic, so a frozen
+  clock would buy partial sameness and put a fake time next to a real
+  PaymentIntent. Rewording the demo is outside this task's lines of
+  `scripts/demo.ts`.
+- **Cost.** A Stripe run still prints three lines that describe the stub and
+  are then wrong: "Nothing here touches real money: the payment rail is a
+  stub.", the heading "THE PAYMENT RAIL — a stub; no real money, no network"
+  (a Stripe run uses the network), and "Timestamps are the stub’s synthetic
+  epoch, not wall-clock time." T13 edits `scripts/` and is the natural place
+  to fix them. No Stripe demo run was
+  made in this task (no key, by the brief), so whether the whole demo
+  completes against a test account is UNVERIFIED.
