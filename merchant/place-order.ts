@@ -13,7 +13,9 @@
  *    currency the mandate is checked against are read from the *stored* quote
  *    and never from the caller: the agent is the party the mandate exists to
  *    bound, so a price it hands back is an input to be distrusted (D39).
- * 3. **Has this quote already been ordered?** A quote is single use (D64).
+ * 3. **Has this quote already been ordered, or its cart?** A quote is single
+ *    use (D64), and an order closes its cart, so another quote of that cart
+ *    is refused too (D130).
  * 4. **Is the stock still there?** Nothing was reserved when the cart was
  *    filled (D17), so it is re-checked here against the catalogue as it is
  *    now.
@@ -22,7 +24,8 @@
  * 6. **Pay.** An order the mandate covers goes straight to the rail —
  *    authorise, capture, then `recordSpend()` — and comes back `paid` (D88).
  *    An order above the threshold is held instead, and `confirm_order` does
- *    that same payment step when a human presents the token.
+ *    that same payment step when a human presents the token. Either way the
+ *    cart is closed as the order is created (D130).
  *
  * Nothing before step 6 consumes mandate budget, which is why a refused order
  * and a declined payment both leave the ledger exactly as it was (D45).

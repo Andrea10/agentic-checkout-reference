@@ -70,10 +70,13 @@ export interface PaymentContext {
  * Authorises, captures, records the spend and the settlement, and returns the
  * paid body.
  *
+ * @throws MerchantError `confirmation_token_spent` if a held order's token was
+ * already spent by another attempt (D128); the rail is not called.
  * @throws PaymentDeclinedError if the rail would not hold the funds.
  * @throws CaptureFailedError if the funds were held and could not be taken.
- * @throws RailUnavailableError if the rail threw, in which case the payment
- * state is unknown and nothing has been recorded as paid. The audit log still
+ * @throws RailUnavailableError if the rail threw, or reported a capture
+ * amount the ledger cannot record (D129), in which case the payment state is
+ * unknown and nothing has been recorded as paid. The audit log still
  * gets a line: "we asked and got no answer" is what an auditor needs to see
  * (D98).
  */
