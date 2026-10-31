@@ -72,3 +72,4 @@ T12a load note: test/agent/protocol.test.ts "reads the tool list over the negoti
 T12a fresh clone of task/T12a at 96078bc: npm ci, lint, build, typecheck, test (667 passed, 1 skipped) all exit 0 at load ~130 2026-10-30T15:27:43Z
 T12a PR #30 opened 2026-10-30T15:27:43Z
 chore post-T12a PR #31 opened 2026-10-30T23:53:24Z
+T12b claimed 2026-10-31T01:17:06Z
