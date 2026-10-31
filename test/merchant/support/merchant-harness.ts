@@ -30,6 +30,7 @@ import {
   type MandateClaims,
   type MandatePolicy,
   type SettlementEntry,
+  type SpendLedger,
 } from '../../../mandate/index.js';
 import { CartStore, sequentialCartIds } from '../../../merchant/cart.js';
 import { CATALOGUE, type Product } from '../../../merchant/catalogue.js';
@@ -121,6 +122,8 @@ export interface MerchantOptions {
   readonly configured?: boolean;
   /** A rail other than the default stub, for the payment-failure suites. */
   readonly rail?: Rail;
+  /** A ledger other than a fresh in-memory one, for the settlement-order pin. */
+  readonly ledger?: SpendLedger;
 }
 
 /**
@@ -147,7 +150,7 @@ export async function openMerchant(options: MerchantOptions = {}): Promise<Merch
   const policy = createMandatePolicy({
     publicKey: issuer.publicKey,
     clock,
-    ledger: createMemoryLedger(),
+    ledger: options.ledger ?? createMemoryLedger(),
     audit: new AuditLog(),
   });
 
