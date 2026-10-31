@@ -89,7 +89,7 @@ D09), registering **seven** tools (`merchant/server.ts`):
 | `add_to_cart` | merges a line into a cart | `cart_not_found`, `invalid_quantity`, `insufficient_stock` |
 | `get_quote` | prices a cart as an ACP checkout session | `cart_not_found`, `cart_empty` |
 | `place_order` | the money-out gate | `merchant_misconfigured`, `quote_not_found`, `quote_expired`, `quote_stale`, `quote_already_ordered`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
-| `confirm_order` | a human's yes, turned into a payment | `merchant_misconfigured`, `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `order_expired`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
+| `confirm_order` | a human's yes, turned into a payment | `merchant_misconfigured`, `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `confirmation_token_spent`, `order_expired`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
 
 Three in-process stores hold the state MCP will not: carts, quotes and orders
 (`merchant/cart.ts`, `merchant/quote.ts`, `merchant/order.ts`). Each is
@@ -288,7 +288,7 @@ see the known limits below (D65).
 | # | Check | Refusal |
 | --- | --- | --- |
 | 1 | the merchant has a trusted issuer configured | `merchant_misconfigured` |
-| 2 | the token names a held order still awaiting confirmation | `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation` |
+| 2 | the token names a held order still awaiting confirmation, and no earlier attempt with it reached the rail and got no answer (D126) | `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `confirmation_token_spent` |
 | 3 | the hold has not lapsed (fifteen minutes) | `order_expired` |
 | 4 | the stock is still there | `insufficient_stock` |
 | 5 | the mandate **still** authorises it | `mandate_refused` |

@@ -3,10 +3,10 @@
 `docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
-and every status, verbatim. **116 decisions, D01 to D116, with no gaps.** The
-116 are all ACCEPTED — ruled by Andrea, 25 on 27 October, 84 on 28 October
-and 7 on 29 October, with none outstanding. The last seven, D110 to D116, are
-T10's own.
+and every status, verbatim. **127 decisions, D01 to D127, with no gaps.** The
+127 are all ACCEPTED — ruled by Andrea, 25 on 27 October, 84 on 28 October,
+7 on 29 October and 11 on 30 October, with none outstanding. D110 to D116 are
+T10's own; D117 to D125 are T11's and D126 to D127 are T12a's.
 
 Counts, which a reviewer can check against the file with
 `grep -c '^## D' docs/DECISIONS.md`:
@@ -20,7 +20,8 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)` | 1 |
 | `ACCEPTED (Andrea, 28 Oct; the write order is pinned by a test added to T12)` | 1 |
 | `ACCEPTED (Andrea, 29 Oct)` | 7 |
-| **Total** | **116** |
+| `ACCEPTED (Andrea, 30 Oct)` | 11 |
+| **Total** | **127** |
 
 If you have five minutes, read §3 and nothing else.
 
@@ -199,6 +200,17 @@ appending rather than editing.
 | D114 | Known limits are one list in ARCHITECTURE.md, not scattered | ACCEPTED 29 Oct | Docs | A reader judging the authorisation story should be able to find everything it does not do in one place. |
 | D115 | Code and comments that disagree with a decision are reported, not fixed | ACCEPTED 29 Oct | Docs | T10's directories are `docs/` and the README; a docs task editing `agent/` would be the drift it is meant to catch. |
 | D116 | Amends D106: the two demo runs differ in two mandate fields, not one | ACCEPTED 29 Oct | Demo | `mandate_id` differs as well as the threshold, and only the threshold decides the path. |
+| D117 | An authorisation is a confirmed, manual-capture PaymentIntent | ACCEPTED 30 Oct | Rail | One create-and-confirm call is one place a network failure can happen, and reading the PaymentIntent back keeps the rail stateless. |
+| D118 | Idempotency keys: a fresh random key per request, never `order_ref` (D56) | ACCEPTED 30 Oct | Rail | T11 fixed the `Rail` interface, so a random key is all the rail can send; it does not close D56's retry gap. |
+| D119 | `requires_action` is an issuer decline, `authentication_required` | ACCEPTED 30 Oct | Rail | The cardholder must authenticate and nobody is present to do it; no hold was placed, so it is a result, not a throw. |
+| D120 | How each Stripe failure is classified, and the cases D50 does not settle | ACCEPTED 30 Oct | Rail | `DeclineCode` is closed, so a parameter error the rail cannot name is thrown rather than given the nearest wrong code. |
+| D121 | The Stripe rail accepts GBP only by default, uppercase in, lowercase out | ACCEPTED 30 Oct | Rail | Nothing else in the repo produces another currency, and the case conversion stays at the one boundary that needs it. |
+| D122 | `stripe` is pinned at exactly 23.1.0 | ACCEPTED 30 Oct | Tooling | The pinned SDK's API version is the one in the documentation the rail was checked against. |
+| D123 | The Stripe SDK is loaded only when a Stripe client is built | ACCEPTED 30 Oct | Rail | The SDK writes to stderr on load under an agent harness, which would change every stub run's output. |
+| D124 | `ACR_RAIL` picks the rail; the demo threads a rail factory through | ACCEPTED 30 Oct | Rail | The choice is made before the first line prints, and an unknown name is refused rather than run as the stub. |
+| D125 | A Stripe test-mode demo run is not byte-identical, and still calls its rail a stub | ACCEPTED 30 Oct | Demo | Stripe's ids cannot be made deterministic, so byte-identity (D103) is kept for the default run only. |
+| D126 | A confirmation token is spent when its attempt reaches the rail and gets no answer | ACCEPTED 30 Oct | Payment | An `authorise` that threw has reached the rail and the hold may exist, so the same token must not ask for a second one. |
+| D127 | Replay means a request the merchant already acted on; the quote and the token are the guard | ACCEPTED 30 Oct | Ordering | The server-issued quote id and token are single use and checked before money moves, so no nonce is signed into the mandate. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.

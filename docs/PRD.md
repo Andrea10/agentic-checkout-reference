@@ -1,6 +1,6 @@
 # PRD: agentic-checkout-reference
 
-*v0.8, 28 Oct 2026. Author: Andrea Caputo.*
+*v0.9, 30 Oct 2026. Author: Andrea Caputo.*
 
 ## 0. In plain words
 
@@ -57,7 +57,7 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 
 **Failure cases (Stage 2)**
 
-- R10. Expired mandate, wrong merchant, over cap and replay are each rejected end to end through the server, and each appears in the audit log.
+- R10. Expired mandate, wrong merchant and over-cap refusals are each rejected end to end through the server, and each leaves its audit entry. A replay is rejected end to end and leaves the audit log unchanged (D65, D99, D127).
 
 ## 6. Non-goals and boundaries
 

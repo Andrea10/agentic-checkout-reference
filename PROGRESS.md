@@ -71,3 +71,4 @@ T12a demo check: npm run demo twice on origin/main and twice on task/T12a, stdou
 T12a load note: test/agent/protocol.test.ts "reads the tool list over the negotiated connection" (spawns merchant/stdio.ts, 5 s timeout) timed out locally three times at load average ~635; see the fresh-clone line for the result at lower load 2026-10-30T15:22:07Z
 T12a fresh clone of task/T12a at 96078bc: npm ci, lint, build, typecheck, test (667 passed, 1 skipped) all exit 0 at load ~130 2026-10-30T15:27:43Z
 T12a PR #30 opened 2026-10-30T15:27:43Z
+chore post-T12a PR #31 opened 2026-10-30T23:53:24Z

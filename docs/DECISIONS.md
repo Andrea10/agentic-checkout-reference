@@ -1984,6 +1984,8 @@ bank (D55).
   fix rather than loosening this. The two codes also split a case a client may
   not care about, so a client that only wants "not confirmable" has to match
   two.
+- *Amended by D126: an attempt whose `authorise` throws has also reached the
+  rail, so it spends the token; a later attempt is `confirmation_token_spent`.*
 
 ## D85 · A rail that throws is `rail_unavailable`, and its message does not travel — ACCEPTED (Andrea, 28 Oct)
 
@@ -2017,6 +2019,9 @@ bank (D55).
   (D56's cost). Swallowing the rail's message also means a developer debugging
   a broken rail has to read the server's own output rather than the tool
   result; the `cause` is there for them.
+- *Amended by D126: the order still keeps its state when `authorise` throws,
+  but its token is spent, so a retry with it is refused and cannot authorise
+  again.*
 
 ## D86 · The decline rides on the error body; the audit log is left alone — ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)
 
@@ -2887,7 +2892,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   true as written and delete this entry, at the price of an audit log whose
   two runs are harder to tell apart.
 
-## D117 · An authorisation is a confirmed, manual-capture PaymentIntent — PROPOSED (T11)
+## D117 · An authorisation is a confirmed, manual-capture PaymentIntent — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** `StripeRail.authorise` makes one call, `paymentIntents.create`,
   with `amount` (the request's minor units), `currency` (lowercased),
@@ -2922,7 +2927,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   Stripe's own timestamps are not used, so the log's times are when this
   process saw the answer.
 
-## D118 · Idempotency keys: a fresh random key per request, never `order_ref` (D56) — PROPOSED (T11)
+## D118 · Idempotency keys: a fresh random key per request, never `order_ref` (D56) — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** Every `create` and `capture` request sends Stripe an
   `idempotencyKey` from an injected factory, `randomUUID` by default. The key
@@ -2944,7 +2949,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   a caller needs retry, the field on `AuthoriseRequest` is the fix (a
   non-breaking addition, D51).
 
-## D119 · `requires_action` is an issuer decline, `authentication_required` — PROPOSED (T11)
+## D119 · `requires_action` is an issuer decline, `authentication_required` — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** A PaymentIntent that comes back from create-and-confirm in
   `requires_action` (Stripe's status when "the payment requires additional
@@ -2968,7 +2973,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   create-and-confirm is UNVERIFIED (PROGRESS.md); both paths are mapped and
   tested against the fake client.
 
-## D120 · How each Stripe failure is classified, and the cases D50 does not settle — PROPOSED (T11)
+## D120 · How each Stripe failure is classified, and the cases D50 does not settle — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** The SDK's error is recognised by its `type`, the SDK class
   name (Stripe's Node error-handling page: "`e.type` identifies the SDK error
@@ -3017,7 +3022,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   are UNVERIFIED (PROGRESS.md). With no PaymentIntent attached, a double
   capture would be reported as `authorisation_not_found`.
 
-## D121 · The Stripe rail accepts GBP only by default, uppercase in, lowercase out — PROPOSED (T11)
+## D121 · The Stripe rail accepts GBP only by default, uppercase in, lowercase out — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** `STRIPE_RAIL_CURRENCIES` is `['GBP']`, the same as the stub's,
   and can be overridden with the `currencies` option. The rail accepts the
@@ -3036,7 +3041,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   amount below the minimum comes back from Stripe as `amount_too_small` and
   becomes `amount_invalid`.
 
-## D122 · `stripe` is pinned at exactly 23.1.0 — PROPOSED (T11)
+## D122 · `stripe` is pinned at exactly 23.1.0 — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** `"stripe": "23.1.0"` in `dependencies`, exact, per D02.
 - **Alternative.** 23.0.1, the previous patch release (22 Oct). Or the 22.x
@@ -3056,7 +3061,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   change to their versions. A major SDK upgrade also changes the API version,
   so it needs re-verifying against the docs, not just a version bump.
 
-## D123 · The Stripe SDK is loaded only when a Stripe client is built — PROPOSED (T11)
+## D123 · The Stripe SDK is loaded only when a Stripe client is built — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** `rail/stripe.ts` imports `stripe` for types only. The real
   client is created with a dynamic `import('stripe')` inside the constructor's
@@ -3077,7 +3082,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   not at construction. A future SDK version that adds more load-time output
   under other variables would need the same test extended.
 
-## D124 · `ACR_RAIL` picks the rail; the demo threads a rail factory through — PROPOSED (T11)
+## D124 · `ACR_RAIL` picks the rail; the demo threads a rail factory through — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** `railFactoryFromEnvironment(env)` in `rail/select.ts` returns
   a `(log) => Rail` factory: the stub for `ACR_RAIL` unset, empty or `stub`;
@@ -3103,7 +3108,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   point. They are listed in the PR. A demo test that changes only the rail
   has one more option to know about.
 
-## D125 · A Stripe test-mode demo run is not byte-identical, and still calls its rail a stub — PROPOSED (T11)
+## D125 · A Stripe test-mode demo run is not byte-identical, and still calls its rail a stub — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** `ACR_RAIL=stripe STRIPE_SECRET_KEY=sk_test_... npm run demo`
   runs the same two orders through Stripe test mode. Its rail lines show
@@ -3128,7 +3133,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   made in this task (no key, by the brief), so whether the whole demo
   completes against a test account is UNVERIFIED.
 
-## D126 · A confirmation token is spent when its attempt reaches the rail and gets no answer — PROPOSED (T12a)
+## D126 · A confirmation token is spent when its attempt reaches the rail and gets no answer — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** When `rail.authorise` throws during a `confirm_order`,
   `settle()` spends the held order's token (`OrderStore.spendToken`) before it
@@ -3165,7 +3170,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   concurrent confirmations, which both pass `requireConfirmable` before either
   reaches the rail (T12b).
 
-## D127 · Replay means a request the merchant already acted on; the quote and the token are the guard — PROPOSED (T12a)
+## D127 · Replay means a request the merchant already acted on; the quote and the token are the guard — ACCEPTED (Andrea, 30 Oct)
 
 - **Decision.** In this code a replay is a `place_order` or `confirm_order`
   call resent after the merchant has already acted on it. Three paths, each
