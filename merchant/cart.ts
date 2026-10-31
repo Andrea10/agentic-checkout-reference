@@ -119,6 +119,8 @@ function lineFor(product: Product, quantity: number): CartLine {
  */
 export class CartStore {
   readonly #carts = new Map<string, Cart>();
+  /** Carts an order was placed from, and that order's id (D130). */
+  readonly #closed = new Map<string, string>();
   readonly #catalogue: readonly Product[];
   readonly #nextId: CartIdFactory;
   readonly #now: Clock;
@@ -174,6 +176,7 @@ export class CartStore {
    */
   addItem(cartId: string, productId: string, quantity: number): Cart {
     const cart = this.get(cartId);
+    this.assertOpen(cartId);
     assertQuantity(quantity);
 
     const product = findProduct(this.#catalogue, productId);
@@ -208,5 +211,32 @@ export class CartStore {
     };
     this.#carts.set(cartId, updated);
     return updated;
+  }
+
+  /**
+   * Closes a cart once an order has been placed from it (D130).
+   *
+   * A quote is single use (D64), but a cart can be quoted again, and a second
+   * quote of an unchanged cart prices the same basket. Closing the cart is
+   * what stops that second quote buying it a second time.
+   */
+  close(cartId: string, orderId: string): void {
+    this.get(cartId);
+    this.#closed.set(cartId, orderId);
+  }
+
+  /**
+   * Refuses a cart an order was placed from.
+   *
+   * @throws MerchantError `cart_closed`, naming the order.
+   */
+  assertOpen(cartId: string): void {
+    const orderId = this.#closed.get(cartId);
+    if (orderId !== undefined) {
+      throw new MerchantError(
+        'cart_closed',
+        `cart ${cartId} was ordered as ${orderId}; create a new cart to buy again`,
+      );
+    }
   }
 }

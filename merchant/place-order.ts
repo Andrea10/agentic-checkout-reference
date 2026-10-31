@@ -127,6 +127,10 @@ export async function placeOrder(
 
   const quote = state.quotes.current(args.quote_id);
   state.orders.assertQuoteUnused(quote.id);
+  // After the quote check, so a replayed quote still reads
+  // `quote_already_ordered` (D127); a second quote of an ordered cart is
+  // refused here (D130).
+  state.carts.assertOpen(quote.cart_id);
   assertStockAvailable(state.catalogue, stockLinesOf(quote), 'the quote was made');
 
   const facts: OrderFacts = {
@@ -158,6 +162,7 @@ export async function placeOrder(
       human_confirm_above_minor: decision.human_confirm_above_minor,
       mandate: args.mandate,
     });
+    state.carts.close(quote.cart_id, held.order_id);
     return {
       status: held.status,
       order_id: held.order_id,
@@ -166,6 +171,7 @@ export async function placeOrder(
   }
 
   const approved = state.orders.approve(facts);
+  state.carts.close(quote.cart_id, approved.order_id);
   return settle({ rail: state.rail, orders: state.orders, policy }, approved);
 }
 

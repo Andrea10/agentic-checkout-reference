@@ -39,7 +39,9 @@ export type MerchantErrorCode =
   | 'capture_failed'
   | 'rail_unavailable'
   // T12a: replay.
-  | 'confirmation_token_spent';
+  | 'confirmation_token_spent'
+  // T12b: an order closes its cart.
+  | 'cart_closed';
 
 /** A refusal the agent is expected to read and act on. */
 export class MerchantError extends Error {
