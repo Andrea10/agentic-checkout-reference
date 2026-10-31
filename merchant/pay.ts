@@ -34,7 +34,7 @@
  * whose answer it did not get.
  */
 
-import { recordSpend } from '../mandate/index.js';
+import { isNonNegativeMinorUnits, recordSpend } from '../mandate/index.js';
 
 import {
   CaptureFailedError,
@@ -133,6 +133,26 @@ export async function settle(
     throw new CaptureFailedError(captured.decline);
   }
 
+  // The rail says it took the money, but the ledger will only record a
+  // non-negative whole number of minor units (`SpendLedger.record`). An amount
+  // it would refuse is checked here, before the order is marked paid, so a
+  // paid order and its recorded spend cannot disagree. The answer cannot be
+  // read, so it is treated like no answer: the order stays `authorised` and
+  // nothing is recorded as paid (D85, D129).
+  if (!isNonNegativeMinorUnits(captured.capture.amount_minor)) {
+    logSettlement(context, order, {
+      outcome: 'rail_unavailable',
+      rail_call: 'capture',
+      rail_answer: 'unreadable',
+    });
+    throw new RailUnavailableError(
+      'capture',
+      new TypeError(
+        `the rail reported a capture of ${String(captured.capture.amount_minor)}, which is not a whole number of minor units`,
+      ),
+    );
+  }
+
   const paid = orders.markPaid(order.order_id, captured.capture);
   // The log before the ledger, and both after the order's own record. The
   // money has moved, so the auditor's line is written from the thing that
@@ -154,7 +174,11 @@ type SettlementDetail =
       readonly outcome: 'payment_declined' | 'capture_failed';
       readonly decline: RailDecline;
     }
-  | { readonly outcome: 'rail_unavailable'; readonly rail_call: RailCall };
+  | {
+      readonly outcome: 'rail_unavailable';
+      readonly rail_call: RailCall;
+      readonly rail_answer?: 'unreadable';
+    };
 
 /**
  * Appends one settlement line to the audit log the policy writes its decisions
@@ -192,6 +216,7 @@ function logSettlement(
             outcome: 'rail_unavailable',
             amount_minor: order.amount_minor,
             rail_call: detail.rail_call,
+            ...(detail.rail_answer === undefined ? {} : { rail_answer: detail.rail_answer }),
           }
         : {
             ...common,
