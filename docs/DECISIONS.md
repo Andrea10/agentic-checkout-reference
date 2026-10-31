@@ -1250,6 +1250,8 @@ it in parallel. The decisions below are the choices that brief left open.
   agent must change the cart and re-quote. And an order refused by the policy
   leaves the quote free, which is right for a mistyped mandate and is also a
   small retry oracle.
+- *Amended by D130: an order closes its cart, so another quote of that cart
+  cannot be ordered; the guard is no longer per quote only.*
 
 ## D65 · The mandate check is the last gate, so refusals before it leave no audit entry — ACCEPTED (Andrea, 28 Oct)
 
@@ -2022,6 +2024,8 @@ bank (D55).
 - *Amended by D126: the order still keeps its state when `authorise` throws,
   but its token is spent, so a retry with it is refused and cannot authorise
   again.*
+- *Amended by D129: a capture whose amount the ledger would refuse is also
+  `rail_unavailable`, with the order left `authorised`.*
 
 ## D86 · The decline rides on the error body; the audit log is left alone — ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)
 
@@ -3169,6 +3173,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   is in memory, like the rest of the store (D63). It does not cover two
   concurrent confirmations, which both pass `requireConfirmable` before either
   reaches the rail (T12b).
+- *Amended by D128: the token is spent as its attempt is sent to the rail,
+  before `authorise` answers, which also stops two confirmations in flight.*
 
 ## D127 · Replay means a request the merchant already acted on; the quote and the token are the guard — ACCEPTED (Andrea, 30 Oct)
 
@@ -3204,3 +3210,116 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   Guards are per server instance (D44, D63): another stdio connection does not
   know the quote, so it refuses with `quote_not_found` instead. A re-quote of the
   same cart is a new quote and not refused here (D64's cost, T12b).
+
+## D128 · Amends D126: the token is spent as its attempt is sent to the rail, not after it throws — PROPOSED (T12b)
+
+- **Decision.** `settle()` calls `OrderStore.spendToken` for a held order
+  immediately before `rail.authorise`, with no `await` between the call and
+  the check inside it. `spendToken` refuses a token already spent with
+  `confirmation_token_spent`; otherwise it marks it. The mark is no longer
+  written in `authorise`'s `catch`. A held order whose token is spent and
+  which still reads `awaiting_confirmation` is now one of two things: its
+  `authorise` threw (D126), or its `authorise` has not answered yet. The
+  refusal message says only what is true of both: the order was already sent
+  to the rail by an earlier confirmation, whose outcome is not known here.
+  Refusals before the rail (unknown token, lapsed hold, stock gone, mandate
+  refused) still leave the token live (D84).
+- **Alternative.** Spend the token in `requireConfirmable`, at the top of
+  `confirm_order`. That also stops the race, but it spends the token on a
+  confirmation later refused for stock or by the mandate, which D84 rules
+  out. Or a separate in-flight set, cleared when `authorise` answers, with its
+  own code (say `confirmation_in_progress`). That tells a waiting caller to
+  try again, but a retry would then read `order_already_paid` or
+  `order_not_awaiting_confirmation`, which it can be told directly by reading
+  the order later. It also adds a code and a second set.
+- **Why.** D84's rule is that the token is spent by the attempt that reaches
+  the rail. D126 wrote the mark only when `authorise` threw, so two
+  confirmations in flight both passed `requireConfirmable` and both asked the
+  rail for a hold. The `Rail` interface has no void, so the second hold
+  could not be released. Writing the mark before the call, in the same
+  synchronous step as the check, is the earliest point that still leaves
+  D84's refusals-before-the-rail free. `test/merchant/settlement-guards.test.ts`
+  runs two `confirm_order` calls through the server with `Promise.all`
+  against a rail that holds `authorise` open until the test releases it. It
+  asserts one `authorise`, one `capture`, one payment, one
+  `confirmation_token_spent`, and a ledger of one order.
+- **Cost.** The guard is one process's memory (D44, D63): two server
+  instances do not share a spent set, so two stdio connections holding the
+  same token are not stopped. A held order cannot reach a second connection
+  today, because each connection has its own order store. In this task's
+  runs of the server test, the second call was refused in
+  `requireConfirmable`: the log held one check line from `confirm_order`, not
+  two. That depends on the SDK's scheduling, so the test does not pin it. The
+  refusal inside `spendToken` is the backstop for the other ordering, or for
+  an `await` added later between the two; `test/merchant/order.test.ts` pins
+  it at the store. A
+  caller refused while the first attempt is still out is not told how it
+  ended, and has to ask again.
+
+## D129 · A capture amount the ledger would refuse leaves the order `authorised` — PROPOSED (T12b)
+
+- **Decision.** After a successful `capture`, `settle()` checks the captured
+  `amount_minor` with `isNonNegativeMinorUnits`, the rule the in-memory
+  ledger's `record` throws on (`SpendLedger.record` documents that `TypeError`
+  as its one refusal). It checks before `markPaid`. An amount that fails is
+  treated as an answer that cannot be read: the order stays `authorised`,
+  nothing is written to the ledger, the audit log gets a `rail_unavailable`
+  line whose detail is `unreadable answer from capture`, and the caller gets
+  `rail_unavailable`, with the reported amount kept on the error's `cause`.
+  The settlement entry gains one optional field, `rail_answer: 'unreadable'`,
+  set on that line only. Every other line prints as before.
+- **Alternative.** Mark the order paid and let `recordSpend` throw, as before:
+  an order `paid`, a `paid` audit line and a ledger at zero, reported to the
+  caller as `internal_error`. Or record the spend before `markPaid`, so a
+  ledger throw leaves the order `authorised`, but by then the `paid` line is
+  already written (D98), so the log and the order would disagree instead. Or
+  a new settlement outcome word; `capture_unreadable` is eighteen
+  characters, longer than the sixteen-character outcome column (D95).
+- **Why.** `paid` and the recorded spend have to say the same thing, and the
+  only refusal the shipped ledger can make is the amount, which is known
+  before either is written. Checking it first means the case never reaches
+  the ledger. An amount the merchant cannot record is not knowledge about the
+  money, so D85's rule applies: no status is written on a guess, and
+  `authorised` is what was last known. `rail_unavailable` is the code D85 gives
+  a payment whose state is unknown, and the detail column says that the rail
+  did answer, so the line does not claim a timeout.
+- **Cost.** A rail that really did take the money, and reported it badly,
+  leaves an order `authorised` and a budget that does not count it, which is
+  the same reconciliation D81 and D85 already leave to a person. A ledger
+  that throws for any reason other than the documented one, for example a
+  database, is not covered: the order would still read `paid` with nothing
+  recorded. The agent cannot tell an unreadable answer from a timeout by the
+  code; only the audit line and the server's `cause` say which.
+
+## D130 · Amends D64: an order closes its cart — PROPOSED (T12b)
+
+- **Decision.** When `place_order` creates an order, held or direct, it
+  closes the cart the quote priced (`CartStore.close`, which records the
+  order id). A closed cart is refused with the new code `cart_closed`, naming
+  the order, by `add_to_cart`, by `get_quote`, and by `place_order` for any
+  other quote of that cart. `place_order` checks it after
+  `assertQuoteUnused`, so the same quote sent again still reads
+  `quote_already_ordered` (D127). A `place_order` refused before an order is
+  created (stock, the mandate) leaves the cart open, as it leaves the quote
+  free (D64). The cart's wire shape is unchanged.
+- **Alternative.** D64 as ruled: the guard per quote only, with the caps and
+  the budget as the bound on buying the same basket twice. Or index orders by
+  `cart_id` and `cart_version` in the order store, so only an unchanged cart
+  is refused and a cart that was edited after its order can be ordered again.
+  That keeps D64's "a person may buy two of the same thing" without a new
+  cart, but reopens the basket to re-ordering after any edit.
+- **Why.** D64's single use is per quote, and a second quote of an unchanged
+  cart prices the same basket under a new id, so an agent could buy it twice
+  with nothing but the budget in the way. D64 itself asked to be overruled on
+  this point. Closing at order creation, not at payment, is what covers held
+  orders: otherwise an agent could collect a confirmation token per quote of
+  one cart, which D64 refused to allow per quote.
+  `test/merchant/settlement-guards.test.ts` covers the paid, held, two-quote
+  and refused cases through the server.
+- **Cost.** Buying the same thing twice now takes a new cart. A declined card
+  or a stuck order (D84, D85, D126) leaves its cart closed, so the agent
+  rebuilds the cart as well as re-quoting. One more code that a client must
+  learn. The closed set is in memory, per server instance (D44). The agent's
+  comment listing `place_order`'s refusal codes (`agent/order.ts`) and
+  `docs/ARCHITECTURE.md` do not name `cart_closed`; both are outside this
+  task's directories.
