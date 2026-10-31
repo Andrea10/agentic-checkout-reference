@@ -83,6 +83,13 @@ export async function settle(
 ): Promise<PaidResult> {
   const { rail, orders, policy } = context;
 
+  // A held order's token is spent here, before the first `await`, so the
+  // check and the mark cannot be split by a second confirmation of the same
+  // token (D84, D128). A throw from `authorise` leaves it spent (D126).
+  if (order.status === 'awaiting_confirmation') {
+    orders.spendToken(order.confirmation_token);
+  }
+
   let authorised: AuthoriseResult;
   try {
     authorised = await rail.authorise({
@@ -94,12 +101,8 @@ export async function settle(
     // The rail may or may not have taken the money. The order keeps the state
     // it had and the ledger is untouched: recording either outcome would be a
     // guess (D50, D85). The audit line says exactly that much — which call
-    // went unanswered — and no more. A held order's token is spent all the
-    // same: this attempt reached the rail, and a replay must not ask it for a
-    // second hold (D84, D126).
-    if (order.status === 'awaiting_confirmation') {
-      orders.spendToken(order.confirmation_token);
-    }
+    // went unanswered — and no more. A held order's token was spent before
+    // the call, so a replay will not ask the rail for a second hold (D126).
     logSettlement(context, order, { outcome: 'rail_unavailable', rail_call: 'authorise' });
     throw new RailUnavailableError('authorise', thrown);
   }

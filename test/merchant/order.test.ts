@@ -490,6 +490,14 @@ describe('requireConfirmable (D84)', () => {
     expect(store.get('order_000001')?.status).toBe('awaiting_confirmation');
   });
 
+  it('refuses to spend a token twice, so two confirmations cannot both reach the rail (D128)', () => {
+    const store = testStore();
+    store.holdForConfirmation(facts(), TERMS);
+    store.spendToken('confirm_000001');
+
+    expect(codeOf(() => store.spendToken('confirm_000001'))).toBe('confirmation_token_spent');
+  });
+
   it('refuses once the hold has lapsed, naming the window (D82)', () => {
     let now = FROZEN;
     const store = new OrderStore({

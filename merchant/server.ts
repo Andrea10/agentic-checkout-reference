@@ -172,7 +172,7 @@ export function createMerchantServer(
     {
       title: 'Confirm order',
       description:
-        'Complete an order that place_order held for a human, by presenting its confirmation_token. Everything that can have changed since the hold is checked again — the stock, the hold\u2019s own fifteen-minute window, and the mandate against the clock and the budget as they are now — and then the rail is charged. Returns status "paid". The token completes one payment: a second call is refused with "order_already_paid". Also refuses "confirmation_token_unknown", "order_expired", "order_not_awaiting_confirmation", "confirmation_token_spent" (an earlier attempt reached the rail and got no answer), "insufficient_stock", "mandate_refused", and the payment refusals "payment_declined", "capture_failed" and "rail_unavailable".',
+        'Complete an order that place_order held for a human, by presenting its confirmation_token. Everything that can have changed since the hold is checked again — the stock, the hold\u2019s own fifteen-minute window, and the mandate against the clock and the budget as they are now — and then the rail is charged. Returns status "paid". The token completes one payment: a second call is refused with "order_already_paid". Also refuses "confirmation_token_unknown", "order_expired", "order_not_awaiting_confirmation", "confirmation_token_spent" (an earlier confirmation of this token was already sent to the rail, and its outcome is not known), "insufficient_stock", "mandate_refused", and the payment refusals "payment_declined", "capture_failed" and "rail_unavailable".',
       inputSchema: confirmOrderInput,
       outputSchema: confirmOrderOutput,
       // Not idempotent: the token is spent by the first call that reaches the

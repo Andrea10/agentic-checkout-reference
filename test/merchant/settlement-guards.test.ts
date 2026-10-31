@@ -135,9 +135,12 @@ describe('two confirm_order calls in flight on one token (D84, D128)', () => {
       ]);
       expect(merchant.state.orders.get('order_000001')?.status).toBe('paid');
       expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(MUG_PRICE);
-      // A token refused while its attempt is still out says so, and does not
-      // claim the rail failed to answer.
       expect(refusalOf(refused[0] as ToolCallResult).message).toContain('order_000001');
+      // One settlement, the payment: the refused call never reached the rail,
+      // so it settled nothing (D99).
+      expect(printed(merchant).filter((line) => line.includes('  order order_'))).toEqual([
+        settlementLine('paid', '-'),
+      ]);
     } finally {
       await merchant.close();
     }
