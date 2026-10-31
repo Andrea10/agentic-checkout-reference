@@ -17,7 +17,8 @@
  * 1. **Is this merchant able to take orders at all?** (D60.)
  * 2. **Is the token good, and is its order still waiting?** A token releases
  *    one payment (D84): a second confirmation is refused, by name — including
- *    after an attempt the rail never answered (D126).
+ *    after an attempt the rail never answered (D126), and while one is still
+ *    waiting on the rail (D128).
  * 3. **Has the hold lapsed?** Fifteen minutes (D82).
  * 4. **Is the stock still there?** Re-read from the catalogue (D17), against
  *    the order's own lines.

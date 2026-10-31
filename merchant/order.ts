@@ -232,7 +232,7 @@ export class OrderStore {
   readonly #orders = new Map<string, Order>();
   readonly #byQuote = new Map<string, string>();
   readonly #byToken = new Map<string, string>();
-  /** Tokens whose attempt reached the rail and `authorise` threw (D85, D126). */
+  /** Tokens whose attempt has been sent to the rail (D126, D128). */
   readonly #spentTokens = new Set<string>();
   readonly #nextId: OrderIdFactory;
   readonly #nextToken: ConfirmationTokenFactory;
@@ -330,11 +330,12 @@ export class OrderStore {
    * confirmation is told what happened to its order instead of being told the
    * token does not exist — D39's reasoning about stale quotes, one level up.
    *
-   * One kind of attempt reaches the rail without moving the order: an `authorise`
-   * that threw leaves it `awaiting_confirmation` (D85). Its token is spent
-   * all the same, so a later confirmation with it is refused before the rail
-   * while the first hold's fate is unknown (D126). Two concurrent
-   * confirmations both pass this check before either reaches the rail (T12b).
+   * The token is spent as its attempt is sent to the rail, before the order
+   * moves (D128). So two kinds of attempt leave a spent token on an order that
+   * still reads `awaiting_confirmation`: one whose `authorise` threw (D85,
+   * D126), and one whose `authorise` has not answered yet. A confirmation that
+   * passes this check can still be refused by {@link spendToken}, if another
+   * confirmation of the same token was sent to the rail after this check ran.
    *
    * @throws MerchantError `confirmation_token_unknown`, `order_already_paid`,
    * `order_not_awaiting_confirmation`, `confirmation_token_spent` or
@@ -363,7 +364,7 @@ export class OrderStore {
     if (this.#spentTokens.has(token)) {
       throw new MerchantError(
         'confirmation_token_spent',
-        `order ${order.order_id} was already sent to the rail, which did not answer; the payment state is unknown, so this token will not send it again`,
+        `order ${order.order_id} was already sent to the rail by an earlier confirmation, whose outcome is not known here, so this token will not send it again`,
       );
     }
 
@@ -379,14 +380,24 @@ export class OrderStore {
   }
 
   /**
-   * Spends a held order's token without moving the order.
+   * Spends a held order's token, or refuses if it is already spent.
    *
-   * For the one kind of attempt that reaches the rail and leaves the order
-   * where it was: an `authorise` that threw (D85). The status is not touched,
-   * because nothing is known about the money; only the token is used up
-   * (D126).
+   * `settle()` calls this immediately before `authorise`, with no `await` in
+   * between, so the check and the mark are one step: of two confirmations in
+   * flight on one token, the second to get here is refused before the rail
+   * (D128). The status is not touched, because nothing is known about the
+   * money yet (D85, D126).
+   *
+   * @throws MerchantError `confirmation_token_spent`.
    */
   spendToken(token: string): void {
+    if (this.#spentTokens.has(token)) {
+      const orderId = this.#byToken.get(token) ?? 'unknown';
+      throw new MerchantError(
+        'confirmation_token_spent',
+        `order ${orderId} was already sent to the rail by an earlier confirmation, whose outcome is not known here, so this token will not send it again`,
+      );
+    }
     this.#spentTokens.add(token);
   }
 

@@ -34,7 +34,7 @@
  * whose answer it did not get.
  */
 
-import { recordSpend } from '../mandate/index.js';
+import { isNonNegativeMinorUnits, recordSpend } from '../mandate/index.js';
 
 import {
   CaptureFailedError,
@@ -70,10 +70,13 @@ export interface PaymentContext {
  * Authorises, captures, records the spend and the settlement, and returns the
  * paid body.
  *
+ * @throws MerchantError `confirmation_token_spent` if a held order's token was
+ * already spent by another attempt (D128); the rail is not called.
  * @throws PaymentDeclinedError if the rail would not hold the funds.
  * @throws CaptureFailedError if the funds were held and could not be taken.
- * @throws RailUnavailableError if the rail threw, in which case the payment
- * state is unknown and nothing has been recorded as paid. The audit log still
+ * @throws RailUnavailableError if the rail threw, or reported a capture
+ * amount the ledger cannot record (D129), in which case the payment state is
+ * unknown and nothing has been recorded as paid. The audit log still
  * gets a line: "we asked and got no answer" is what an auditor needs to see
  * (D98).
  */
@@ -82,6 +85,13 @@ export async function settle(
   order: PayableOrder,
 ): Promise<PaidResult> {
   const { rail, orders, policy } = context;
+
+  // A held order's token is spent here, before the first `await`, so the
+  // check and the mark cannot be split by a second confirmation of the same
+  // token (D84, D128). A throw from `authorise` leaves it spent (D126).
+  if (order.status === 'awaiting_confirmation') {
+    orders.spendToken(order.confirmation_token);
+  }
 
   let authorised: AuthoriseResult;
   try {
@@ -94,12 +104,8 @@ export async function settle(
     // The rail may or may not have taken the money. The order keeps the state
     // it had and the ledger is untouched: recording either outcome would be a
     // guess (D50, D85). The audit line says exactly that much — which call
-    // went unanswered — and no more. A held order's token is spent all the
-    // same: this attempt reached the rail, and a replay must not ask it for a
-    // second hold (D84, D126).
-    if (order.status === 'awaiting_confirmation') {
-      orders.spendToken(order.confirmation_token);
-    }
+    // went unanswered — and no more. A held order's token was spent before
+    // the call, so a replay will not ask the rail for a second hold (D126).
     logSettlement(context, order, { outcome: 'rail_unavailable', rail_call: 'authorise' });
     throw new RailUnavailableError('authorise', thrown);
   }
@@ -130,6 +136,26 @@ export async function settle(
     throw new CaptureFailedError(captured.decline);
   }
 
+  // The rail says it took the money, but the ledger will only record a
+  // non-negative whole number of minor units (`SpendLedger.record`). An amount
+  // it would refuse is checked here, before the order is marked paid, so a
+  // paid order and its recorded spend cannot disagree. The answer cannot be
+  // read, so it is treated like no answer: the order stays `authorised` and
+  // nothing is recorded as paid (D85, D129).
+  if (!isNonNegativeMinorUnits(captured.capture.amount_minor)) {
+    logSettlement(context, order, {
+      outcome: 'rail_unavailable',
+      rail_call: 'capture',
+      rail_answer: 'unreadable',
+    });
+    throw new RailUnavailableError(
+      'capture',
+      new TypeError(
+        `the rail reported a capture of ${String(captured.capture.amount_minor)}, which is not a whole number of minor units`,
+      ),
+    );
+  }
+
   const paid = orders.markPaid(order.order_id, captured.capture);
   // The log before the ledger, and both after the order's own record. The
   // money has moved, so the auditor's line is written from the thing that
@@ -151,7 +177,11 @@ type SettlementDetail =
       readonly outcome: 'payment_declined' | 'capture_failed';
       readonly decline: RailDecline;
     }
-  | { readonly outcome: 'rail_unavailable'; readonly rail_call: RailCall };
+  | {
+      readonly outcome: 'rail_unavailable';
+      readonly rail_call: RailCall;
+      readonly rail_answer?: 'unreadable';
+    };
 
 /**
  * Appends one settlement line to the audit log the policy writes its decisions
@@ -189,6 +219,7 @@ function logSettlement(
             outcome: 'rail_unavailable',
             amount_minor: order.amount_minor,
             rail_call: detail.rail_call,
+            ...(detail.rail_answer === undefined ? {} : { rail_answer: detail.rail_answer }),
           }
         : {
             ...common,

@@ -13,7 +13,9 @@
  *    currency the mandate is checked against are read from the *stored* quote
  *    and never from the caller: the agent is the party the mandate exists to
  *    bound, so a price it hands back is an input to be distrusted (D39).
- * 3. **Has this quote already been ordered?** A quote is single use (D64).
+ * 3. **Has this quote already been ordered, or its cart?** A quote is single
+ *    use (D64), and an order closes its cart, so another quote of that cart
+ *    is refused too (D130).
  * 4. **Is the stock still there?** Nothing was reserved when the cart was
  *    filled (D17), so it is re-checked here against the catalogue as it is
  *    now.
@@ -22,7 +24,8 @@
  * 6. **Pay.** An order the mandate covers goes straight to the rail —
  *    authorise, capture, then `recordSpend()` — and comes back `paid` (D88).
  *    An order above the threshold is held instead, and `confirm_order` does
- *    that same payment step when a human presents the token.
+ *    that same payment step when a human presents the token. Either way the
+ *    cart is closed as the order is created (D130).
  *
  * Nothing before step 6 consumes mandate budget, which is why a refused order
  * and a declined payment both leave the ledger exactly as it was (D45).
@@ -127,6 +130,10 @@ export async function placeOrder(
 
   const quote = state.quotes.current(args.quote_id);
   state.orders.assertQuoteUnused(quote.id);
+  // After the quote check, so a replayed quote still reads
+  // `quote_already_ordered` (D127); a second quote of an ordered cart is
+  // refused here (D130).
+  state.carts.assertOpen(quote.cart_id);
   assertStockAvailable(state.catalogue, stockLinesOf(quote), 'the quote was made');
 
   const facts: OrderFacts = {
@@ -158,6 +165,7 @@ export async function placeOrder(
       human_confirm_above_minor: decision.human_confirm_above_minor,
       mandate: args.mandate,
     });
+    state.carts.close(quote.cart_id, held.order_id);
     return {
       status: held.status,
       order_id: held.order_id,
@@ -166,6 +174,7 @@ export async function placeOrder(
   }
 
   const approved = state.orders.approve(facts);
+  state.carts.close(quote.cart_id, approved.order_id);
   return settle({ rail: state.rail, orders: state.orders, policy }, approved);
 }
 

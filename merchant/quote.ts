@@ -192,12 +192,13 @@ export class QuoteStore {
   /**
    * Prices a cart and records the quote.
    *
-   * Refuses `cart_not_found` for an unknown cart and `cart_empty` for one with
-   * nothing in it: a quote is a priced promise, and there is nothing to price
-   * (D37).
+   * Refuses `cart_not_found` for an unknown cart, `cart_closed` for one an
+   * order was placed from (D130), and `cart_empty` for one with nothing in
+   * it: a quote is a priced promise, and there is nothing to price (D37).
    */
   issue(cartId: string): Quote {
     const cart = this.#carts.get(cartId);
+    this.#carts.assertOpen(cartId);
     if (cart.items.length === 0) {
       throw new MerchantError('cart_empty', `cart ${cartId} has no items to quote`);
     }

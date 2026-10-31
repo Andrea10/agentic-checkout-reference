@@ -131,7 +131,7 @@ export function createMerchantServer(
     {
       title: 'Add to cart',
       description:
-        'Add units of a product to an existing cart and return the whole cart. Adding a product already in the cart merges the lines.',
+        'Add units of a product to an existing cart and return the whole cart. Adding a product already in the cart merges the lines. Refuses "cart_closed" once an order has been placed from the cart.',
       inputSchema: addToCartInput,
       outputSchema: cartOutput,
       annotations: { readOnlyHint: false },
@@ -144,7 +144,7 @@ export function createMerchantServer(
     {
       title: 'Get quote',
       description:
-        'Price a cart and return a quote, shaped to the Agentic Commerce Protocol checkout session: line items, totals, status and an expiry. The quote is tied to the cart version it priced, so changing the cart makes it stale. Refuses an empty cart.',
+        'Price a cart and return a quote, shaped to the Agentic Commerce Protocol checkout session: line items, totals, status and an expiry. The quote is tied to the cart version it priced, so changing the cart makes it stale. Refuses an empty cart, and "cart_closed" for a cart an order has been placed from.',
       inputSchema: getQuoteInput,
       outputSchema: getQuoteOutput,
       annotations: { readOnlyHint: false, idempotentHint: false },
@@ -157,7 +157,7 @@ export function createMerchantServer(
     {
       title: 'Place order',
       description:
-        'Place an order against a quote, presenting a signed spending mandate. The amount and currency checked against the mandate are read from the stored quote, never from this call. Returns status "paid" when the mandate covers the purchase, the rail having authorised and captured it, or "awaiting_confirmation" with a confirmation_token when the amount is above the mandate\u2019s human-confirm threshold, in which case confirm_order completes the payment. Refuses with code "mandate_refused" and a reasons list naming every failed check, or with "quote_expired", "quote_stale", "quote_already_ordered" or "insufficient_stock". A payment that does not go through refuses with "payment_declined", "capture_failed" or "rail_unavailable", and no order is paid and no budget consumed.',
+        'Place an order against a quote, presenting a signed spending mandate. The amount and currency checked against the mandate are read from the stored quote, never from this call. Returns status "paid" when the mandate covers the purchase, the rail having authorised and captured it, or "awaiting_confirmation" with a confirmation_token when the amount is above the mandate\u2019s human-confirm threshold, in which case confirm_order completes the payment. Refuses with code "mandate_refused" and a reasons list naming every failed check, or with "quote_expired", "quote_stale", "quote_already_ordered", "cart_closed" (another quote of the same cart was already ordered) or "insufficient_stock". A payment that does not go through refuses with "payment_declined", "capture_failed" or "rail_unavailable", and no order is paid and no budget consumed.',
       inputSchema: placeOrderInput,
       outputSchema: placeOrderOutput,
       // Not idempotent and not read-only: a second call with the same quote is
@@ -172,7 +172,7 @@ export function createMerchantServer(
     {
       title: 'Confirm order',
       description:
-        'Complete an order that place_order held for a human, by presenting its confirmation_token. Everything that can have changed since the hold is checked again — the stock, the hold\u2019s own fifteen-minute window, and the mandate against the clock and the budget as they are now — and then the rail is charged. Returns status "paid". The token completes one payment: a second call is refused with "order_already_paid". Also refuses "confirmation_token_unknown", "order_expired", "order_not_awaiting_confirmation", "confirmation_token_spent" (an earlier attempt reached the rail and got no answer), "insufficient_stock", "mandate_refused", and the payment refusals "payment_declined", "capture_failed" and "rail_unavailable".',
+        'Complete an order that place_order held for a human, by presenting its confirmation_token. Everything that can have changed since the hold is checked again — the stock, the hold\u2019s own fifteen-minute window, and the mandate against the clock and the budget as they are now — and then the rail is charged. Returns status "paid". The token completes one payment: a second call is refused with "order_already_paid". Also refuses "confirmation_token_unknown", "order_expired", "order_not_awaiting_confirmation", "confirmation_token_spent" (an earlier confirmation of this token was already sent to the rail, and its outcome is not known), "insufficient_stock", "mandate_refused", and the payment refusals "payment_declined", "capture_failed" and "rail_unavailable".',
       inputSchema: confirmOrderInput,
       outputSchema: confirmOrderOutput,
       // Not idempotent: the token is spent by the first call that reaches the

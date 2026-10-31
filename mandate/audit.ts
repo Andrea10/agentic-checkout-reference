@@ -80,7 +80,10 @@ export type SettlementOutcome =
   | 'payment_declined'
   /** The funds were held and could not be taken; the hold is outstanding. */
   | 'capture_failed'
-  /** The rail threw rather than answering, so the payment state is unknown. */
+  /**
+   * The rail threw rather than answering, or answered with an amount the
+   * ledger cannot record (D129), so the payment state is unknown.
+   */
   | 'rail_unavailable';
 
 /** Which of the two rail calls an entry refers to. */
@@ -123,6 +126,11 @@ export interface SettlementEntry {
   readonly decline?: SettlementDecline;
   /** Set on `rail_unavailable` only: the call that never answered. */
   readonly rail_call?: AuditRailCall;
+  /**
+   * Set on `rail_unavailable` only, when the call did answer but with an
+   * amount the ledger cannot record (D129). Absent means no answer at all.
+   */
+  readonly rail_answer?: 'unreadable';
 }
 
 /**
@@ -209,17 +217,21 @@ export class AuditLog {
       currency: settlement.currency,
       outcome: settlement.outcome,
     };
-    // The two detail fields are each set on some outcomes only, and
+    // The detail fields are each set on some outcomes only, and
     // `exactOptionalPropertyTypes` means an absent one is left out rather
     // than written as `undefined`.
     const withDecline =
       settlement.decline === undefined
         ? known
         : { ...known, decline: Object.freeze({ ...settlement.decline }) };
-    const entry: SettlementEntry = Object.freeze(
+    const withCall =
       settlement.rail_call === undefined
         ? withDecline
-        : { ...withDecline, rail_call: settlement.rail_call },
+        : { ...withDecline, rail_call: settlement.rail_call };
+    const entry: SettlementEntry = Object.freeze(
+      settlement.rail_answer === undefined
+        ? withCall
+        : { ...withCall, rail_answer: settlement.rail_answer },
     );
 
     this.log.push(entry);
@@ -281,7 +293,8 @@ function reasonsOf(entry: MandateCheckEntry): string {
  * The last column of a settlement line: why the money did not move.
  *
  * A decline prints its code and who said no. A rail that threw prints the
- * call that never answered, and nothing else — its own message does not
+ * call that never answered, or the call whose answer could not be recorded
+ * (D129), and nothing else — its own message does not
  * travel, here for the reason it does not travel on the wire (D85). A payment
  * that went through has nothing left to say, so it gets the same dash a
  * passed check does.
@@ -291,7 +304,9 @@ function detailOf(entry: SettlementEntry): string {
     return `${entry.decline.code} (${entry.decline.origin})`;
   }
   if (entry.rail_call !== undefined) {
-    return `no answer from ${entry.rail_call}`;
+    return entry.rail_answer === 'unreadable'
+      ? `unreadable answer from ${entry.rail_call}`
+      : `no answer from ${entry.rail_call}`;
   }
   return '-';
 }
