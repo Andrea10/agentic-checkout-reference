@@ -73,3 +73,7 @@ T12a fresh clone of task/T12a at 96078bc: npm ci, lint, build, typecheck, test (
 T12a PR #30 opened 2026-10-30T15:27:43Z
 chore post-T12a PR #31 opened 2026-10-30T23:53:24Z
 T12b claimed 2026-10-31T01:17:06Z
+T12b failing first: 5 of the new tests failed on main for the reason named (two authorise calls; internal_error with the order paid; three cart re-quotes accepted); the D98 and D126 pins passed on main, and each failed under its mutation while the old suite stayed at 667 passed 2026-10-31T01:33:01Z
+T12b mutations: 11 applied and restored, each failed at least one new test (list in the PR) 2026-10-31T01:33:01Z
+T12b demo check: npm run demo twice on a fresh clone of main and twice on a fresh clone of task/T12b, stdout sha256 308761f0…2e66 for all four, stderr empty for all four 2026-10-31T01:33:01Z
+T12b fresh clone of task/T12b at 4e28f22: npm ci, lint, build, typecheck, test (676 passed, 1 skipped) all exit 0 2026-10-31T01:33:01Z
