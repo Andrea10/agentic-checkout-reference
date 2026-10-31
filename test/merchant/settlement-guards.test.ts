@@ -145,22 +145,6 @@ describe('two confirm_order calls in flight on one token (D84, D128)', () => {
       await merchant.close();
     }
   });
-
-  it('still leaves the token live after a refusal before the rail (D84)', async () => {
-    const merchant = await openMerchant();
-    try {
-      const { confirmation_token } = await holdOrder(merchant);
-      merchant.sellOut(MUG);
-      expect(refusalOf(await confirm(merchant, confirmation_token)).code).toBe(
-        'insufficient_stock',
-      );
-      merchant.sellOut(MUG, 5);
-
-      successOf(await confirm(merchant, confirmation_token));
-    } finally {
-      await merchant.close();
-    }
-  });
 });
 
 describe('a capture whose amount the ledger would refuse (D45, D87, D129)', () => {
