@@ -3,10 +3,11 @@
 `docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
-and every status, verbatim. **127 decisions, D01 to D127, with no gaps.** The
-127 are all ACCEPTED — ruled by Andrea, 25 on 27 October, 84 on 28 October,
-7 on 29 October and 11 on 30 October, with none outstanding. D110 to D116 are
-T10's own; D117 to D125 are T11's and D126 to D127 are T12a's.
+and every status, verbatim. **130 decisions, D01 to D130, with no gaps.**
+127 are ACCEPTED — ruled by Andrea, 25 on 27 October, 84 on 28 October,
+7 on 29 October and 11 on 30 October. 3 are PROPOSED and outstanding: D128 to
+D130, which stay PROPOSED until T12c merges. D110 to D116 are T10's own;
+D117 to D125 are T11's, D126 to D127 are T12a's and D128 to D130 are T12b's.
 
 Counts, which a reviewer can check against the file with
 `grep -c '^## D' docs/DECISIONS.md`:
@@ -21,7 +22,8 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 28 Oct; the write order is pinned by a test added to T12)` | 1 |
 | `ACCEPTED (Andrea, 29 Oct)` | 7 |
 | `ACCEPTED (Andrea, 30 Oct)` | 11 |
-| **Total** | **127** |
+| `PROPOSED (T12b)` | 3 |
+| **Total** | **130** |
 
 If you have five minutes, read §3 and nothing else.
 
@@ -211,6 +213,9 @@ appending rather than editing.
 | D125 | A Stripe test-mode demo run is not byte-identical, and still calls its rail a stub | ACCEPTED 30 Oct | Demo | Stripe's ids cannot be made deterministic, so byte-identity (D103) is kept for the default run only. |
 | D126 | A confirmation token is spent when its attempt reaches the rail and gets no answer | ACCEPTED 30 Oct | Payment | An `authorise` that threw has reached the rail and the hold may exist, so the same token must not ask for a second one. |
 | D127 | Replay means a request the merchant already acted on; the quote and the token are the guard | ACCEPTED 30 Oct | Ordering | The server-issued quote id and token are single use and checked before money moves, so no nonce is signed into the mandate. |
+| D128 | Amends D126: the token is spent as its attempt is sent to the rail, not after it throws | PROPOSED (T12b) | Payment | The mark is written in the same synchronous step as the check, before `authorise`, so two confirmations in flight cannot both ask the rail for a hold. |
+| D129 | A capture amount the ledger would refuse leaves the order `authorised` | PROPOSED (T12b) | Payment | The ledger's one refusal is the amount, so it is checked before `markPaid`, and an amount that fails is an unreadable answer (D85), not a payment. |
+| D130 | Amends D64: an order closes its cart | PROPOSED (T12b) | Ordering | A second quote of an unchanged cart could buy the same basket again, so the cart is closed when the order is created, held or direct. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.
@@ -220,6 +225,8 @@ a test added to T12)`.
 Statuses in the table are shortened — `ACCEPTED (Andrea, 27 Oct)` reads
 `ACCEPTED 27 Oct` — because every ruling in the file is Andrea's. Nothing else
 is abbreviated, and the two qualified statuses are reproduced in full above.
+PROPOSED statuses are not shortened: `PROPOSED (T12b)` reads as the heading
+writes it.
 
 ## 3. Ten decisions that matter
 
