@@ -84,3 +84,4 @@ T12c failing first: on origin/main with the new tests copied in, 9 of the new te
 T12c mutations: 11 applied and restored, each failed at least one new test (list in the PR) 2026-11-01T11:51:26Z
 T12c audit lines: main's 676 tests, with AuditLog.print instrumented, print 151 lines (58 settlement lines) against main's code and against this branch's code, sorted byte-identical 2026-11-01T11:51:26Z
 T12c agent/order.ts comment commit 876d647: tsc -p tsconfig.build.json --removeComments --sourceMap false --declarationMap false, output of the parent and of the commit diff -r identical, 98 files (with source maps on, only agent/order.js.map differs, by line offsets) 2026-11-01T11:51:26Z
+T12c PR #34 opened 2026-11-01T11:54:07Z
