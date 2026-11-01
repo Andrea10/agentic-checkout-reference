@@ -3322,7 +3322,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
     until a person reconciles.
   - *A ledger that throws a plain `Error`* (a database, say) is not covered
     by either check: the order is already `paid` and the `paid` line written
-    (D98), the ledger stays at zero, and the caller sees `internal_error`.
+    (D98), nothing is added to the ledger (zero, for a mandate's first
+    order), and the caller sees `internal_error`.
   - The agent cannot tell an unreadable answer from a timeout by the code;
     only the audit line and the server's `cause` say which.
   - The check is the in-memory ledger's rule. Another `SpendLedger` with
