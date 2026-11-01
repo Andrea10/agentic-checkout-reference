@@ -12,7 +12,9 @@
  *    `payment_declined`. A *throw* is the rail itself failing, which says
  *    nothing about the money: the order is left where it was and nothing is
  *    recorded as paid or spent (D85). The audit log does get a line saying
- *    which call went unanswered, which is not a claim about the money.
+ *    which call went unanswered, which is not a claim about the money. A
+ *    hold whose amount the ledger could not record, or that is not the amount
+ *    asked for, is treated the same way, and capture is not called (D129).
  * 2. **`capture`.** A decline here is a different event from a decline above —
  *    the funds are held and could not be taken — so the order stays
  *    `authorised` and the code is `capture_failed` (D81).
@@ -74,9 +76,10 @@ export interface PaymentContext {
  * already spent by another attempt (D128); the rail is not called.
  * @throws PaymentDeclinedError if the rail would not hold the funds.
  * @throws CaptureFailedError if the funds were held and could not be taken.
- * @throws RailUnavailableError if the rail threw, or reported a capture
- * amount the ledger cannot record (D129), in which case the payment state is
- * unknown and nothing has been recorded as paid. The audit log still
+ * @throws RailUnavailableError if the rail threw, reported a hold the
+ * ledger could not record or for an amount other than the one asked for, or
+ * reported a capture amount the ledger cannot record (D129), in which case the
+ * payment state is unknown and nothing has been recorded as paid. The audit log still
  * gets a line: "we asked and got no answer" is what an auditor needs to see
  * (D98).
  */
@@ -116,6 +119,24 @@ export async function settle(
     throw new PaymentDeclinedError(authorised.decline);
   }
 
+  // The hold is checked before anything is done with it, because `capture`
+  // takes the hold in full (D52): an amount the ledger would refuse, or a hold
+  // for an amount other than the one asked for, would otherwise be taken and
+  // only then found out. The answer cannot be acted on, so it is treated like
+  // no answer from `authorise`: capture is not called, the order keeps the
+  // state it had, the ledger is untouched and a held order's token stays
+  // spent (D85, D126, D129). The `Rail` interface has no void, so the hold
+  // the rail granted is left uncaptured.
+  const holdProblem = unreadableHold(authorised.authorisation.amount_minor, order.amount_minor);
+  if (holdProblem !== undefined) {
+    logSettlement(context, order, {
+      outcome: 'rail_unavailable',
+      rail_call: 'authorise',
+      rail_answer: 'unreadable',
+    });
+    throw new RailUnavailableError('authorise', new TypeError(holdProblem));
+  }
+
   const held = orders.markAuthorised(order.order_id, authorised.authorisation);
 
   let captured: CaptureResult;
@@ -139,9 +160,11 @@ export async function settle(
   // The rail says it took the money, but the ledger will only record a
   // non-negative whole number of minor units (`SpendLedger.record`). An amount
   // it would refuse is checked here, before the order is marked paid, so a
-  // paid order and its recorded spend cannot disagree. The answer cannot be
-  // read, so it is treated like no answer: the order stays `authorised` and
-  // nothing is recorded as paid (D85, D129).
+  // paid order and its recorded spend cannot disagree. The hold was checked
+  // before capture, so this is the second line: a rail that held a good amount
+  // and reported taking a bad one. By its own answer the money has moved, but
+  // the answer cannot be read, so it is treated like no answer: the order
+  // stays `authorised` and nothing is recorded as paid (D85, D129).
   if (!isNonNegativeMinorUnits(captured.capture.amount_minor)) {
     logSettlement(context, order, {
       outcome: 'rail_unavailable',
@@ -168,6 +191,24 @@ export async function settle(
   recordSpend(policy, spendFor(paid.mandate_id, captured.capture));
 
   return { status: 'paid', order_id: paid.order_id };
+}
+
+/**
+ * Why the amount a hold reports cannot be captured, or `undefined` if it can.
+ *
+ * Two checks, in this order: the ledger's own rule, through the function the
+ * ledger calls, so the rule is not copied here; then the amount asked for,
+ * because a full capture of a hold for any other amount would take a sum the
+ * mandate did not check (D51, D52, D129).
+ */
+function unreadableHold(heldMinor: number, requestedMinor: number): string | undefined {
+  if (!isNonNegativeMinorUnits(heldMinor)) {
+    return `the rail reported a hold of ${String(heldMinor)}, which is not a whole number of minor units`;
+  }
+  if (heldMinor !== requestedMinor) {
+    return `the rail reported a hold of ${String(heldMinor)} where ${String(requestedMinor)} was asked for`;
+  }
+  return undefined;
 }
 
 /** What varies between the four settlement lines; everything else is the order. */

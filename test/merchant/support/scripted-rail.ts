@@ -45,6 +45,11 @@ export interface RailScript {
    * full, as everywhere else.
    */
   readonly captureAmount?: number;
+  /**
+   * Report a hold for this amount instead of the one asked for, the way a
+   * broken rail might (D129). Omit it and the hold echoes the request.
+   */
+  readonly authoriseAmount?: number;
   /** Hold this call open until {@link ScriptedRail.release} is called. */
   readonly pauseAt?: RailCall;
   /** Where the delegated stub's log entries go. */
@@ -101,7 +106,10 @@ export class ScriptedRail implements Rail {
     const scripted = this.#script.authorise;
     if (scripted instanceof Error) throw scripted;
     if (scripted !== undefined) return { ok: false, decline: scripted };
-    return this.#inner.authorise(request);
+    const result = await this.#inner.authorise(request);
+    const held = this.#script.authoriseAmount;
+    if (!result.ok || held === undefined) return result;
+    return { ok: true, authorisation: { ...result.authorisation, amount_minor: held } };
   }
 
   async capture(request: CaptureRequest): Promise<CaptureResult> {

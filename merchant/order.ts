@@ -331,11 +331,13 @@ export class OrderStore {
    * token does not exist — D39's reasoning about stale quotes, one level up.
    *
    * The token is spent as its attempt is sent to the rail, before the order
-   * moves (D128). So two kinds of attempt leave a spent token on an order that
-   * still reads `awaiting_confirmation`: one whose `authorise` threw (D85,
-   * D126), and one whose `authorise` has not answered yet. A confirmation that
-   * passes this check can still be refused by {@link spendToken}, if another
-   * confirmation of the same token was sent to the rail after this check ran.
+   * moves (D128). So three kinds of attempt leave a spent token on an order
+   * that still reads `awaiting_confirmation`: one whose `authorise` threw (D85,
+   * D126), one whose `authorise` answered with a hold `settle()` would not
+   * capture (D129), and one whose `authorise` has not answered yet. A
+   * confirmation that passes this check can still be refused by
+   * {@link spendToken}, if another confirmation of the same token was sent to
+   * the rail after this check ran.
    *
    * @throws MerchantError `confirmation_token_unknown`, `order_already_paid`,
    * `order_not_awaiting_confirmation`, `confirmation_token_spent` or

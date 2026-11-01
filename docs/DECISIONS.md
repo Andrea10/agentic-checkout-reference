@@ -1988,6 +1988,8 @@ bank (D55).
   two.
 - *Amended by D126: an attempt whose `authorise` throws has also reached the
   rail, so it spends the token; a later attempt is `confirmation_token_spent`.*
+- *Amended by D130: a declined card also leaves its cart closed, so the agent
+  has to build a new cart, not only re-quote.*
 
 ## D85 · A rail that throws is `rail_unavailable`, and its message does not travel — ACCEPTED (Andrea, 28 Oct)
 
@@ -2024,8 +2026,10 @@ bank (D55).
 - *Amended by D126: the order still keeps its state when `authorise` throws,
   but its token is spent, so a retry with it is refused and cannot authorise
   again.*
-- *Amended by D129: a capture whose amount the ledger would refuse is also
-  `rail_unavailable`, with the order left `authorised`.*
+- *Amended by D129: a hold whose amount the ledger would refuse, or that is
+  not the amount asked for, is also `rail_unavailable`, with capture not
+  called and the order left as it was; a capture whose amount the ledger
+  would refuse is `rail_unavailable` with the order left `authorised`.*
 
 ## D86 · The decline rides on the error body; the audit log is left alone — ACCEPTED (Andrea, 28 Oct; the audit gap it records is closed by T07c)
 
@@ -3218,9 +3222,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   the check inside it. `spendToken` refuses a token already spent with
   `confirmation_token_spent`; otherwise it marks it. The mark is no longer
   written in `authorise`'s `catch`. A held order whose token is spent and
-  which still reads `awaiting_confirmation` is now one of two things: its
-  `authorise` threw (D126), or its `authorise` has not answered yet. The
-  refusal message says only what is true of both: the order was already sent
+  which still reads `awaiting_confirmation` is now one of three things: its
+  `authorise` threw (D126), its `authorise` answered with a hold `settle()`
+  would not capture (D129, as rewritten in T12c), or its `authorise` has not
+  answered yet. The refusal message says only what is true of all three: the
+  order was already sent
   to the rail by an earlier confirmation, whose outcome is not known here.
   Refusals before the rail (unknown token, lapsed hold, stock gone, mandate
   refused) still leave the token live (D84).
@@ -3256,40 +3262,71 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   caller refused while the first attempt is still out is not told how it
   ended, and has to ask again.
 
-## D129 · A capture amount the ledger would refuse leaves the order `authorised` — PROPOSED (T12b)
+## D129 · Amends D85: a rail answer whose amount cannot be acted on is `rail_unavailable`, checked before capture and again after — PROPOSED (T12b; rewritten in T12c for option B, ruled by Andrea)
 
-- **Decision.** After a successful `capture`, `settle()` checks the captured
-  `amount_minor` with `isNonNegativeMinorUnits`, the rule the in-memory
-  ledger's `record` throws on (`SpendLedger.record` documents that `TypeError`
-  as its one refusal). It checks before `markPaid`. An amount that fails is
-  treated as an answer that cannot be read: the order stays `authorised`,
-  nothing is written to the ledger, the audit log gets a `rail_unavailable`
-  line whose detail is `unreadable answer from capture`, and the caller gets
-  `rail_unavailable`, with the reported amount kept on the error's `cause`.
-  The settlement entry gains one optional field, `rail_answer: 'unreadable'`,
-  set on that line only. Every other line prints as before.
-- **Alternative.** Mark the order paid and let `recordSpend` throw, as before:
-  an order `paid`, a `paid` audit line and a ledger at zero, reported to the
-  caller as `internal_error`. Or record the spend before `markPaid`, so a
-  ledger throw leaves the order `authorised`, but by then the `paid` line is
-  already written (D98), so the log and the order would disagree instead. Or
-  a new settlement outcome word; `capture_unreadable` is eighteen
+- **Decision.** This amends D85, which gives `rail_unavailable` to a rail
+  that *throws*: it now also covers a rail that answers with an amount the
+  merchant cannot act on. `settle()` checks the amount twice.
+  1. **Before capture.** After a successful `authorise`, the held
+     `amount_minor` is checked with `isNonNegativeMinorUnits`, the function
+     the in-memory ledger's `record` calls (`mandate/ledger.ts`), so the rule
+     is shared, not copied. The check also compares the held amount with the
+     amount asked for, and refuses any difference. If either fails, `capture`
+     is not called, the order keeps the state it had (`approved`, or
+     `awaiting_confirmation` with its token spent, D126), nothing is written
+     to the ledger, the audit log gets a `rail_unavailable` line whose detail
+     is `unreadable answer from authorise`, and the caller gets
+     `rail_unavailable`. The reason, with the reported amount, is kept on the
+     error's `cause`.
+  2. **After capture, the second line.** A successful `capture` whose
+     `amount_minor` fails the same `isNonNegativeMinorUnits` leaves the order
+     `authorised`, writes nothing to the ledger, and gets the audit detail
+     `unreadable answer from capture` and the code `rail_unavailable`. The
+     captured amount is not compared with the hold: D87 records what the rail
+     took, which may be less.
+  The settlement entry carries one optional field, `rail_answer:
+  'unreadable'`, set on those two lines only. Every other line prints as
+  before.
+- **Alternative.** Option A, as T12b shipped it: the after-capture check only,
+  so a bad amount is found after the rail reports the money taken. Or no
+  check: mark the order paid and let `recordSpend` throw, which leaves the
+  order `paid`, a `paid` line and a ledger at zero, reported as
+  `internal_error`. Or check the hold with the ledger's rule only, without
+  the comparison. Or a new outcome word; `capture_unreadable` is eighteen
   characters, longer than the sixteen-character outcome column (D95).
-- **Why.** `paid` and the recorded spend have to say the same thing, and the
-  only refusal the shipped ledger can make is the amount, which is known
-  before either is written. Checking it first means the case never reaches
-  the ledger. An amount the merchant cannot record is not knowledge about the
-  money, so D85's rule applies: no status is written on a guess, and
-  `authorised` is what was last known. `rail_unavailable` is the code D85 gives
-  a payment whose state is unknown, and the detail column says that the rail
-  did answer, so the line does not claim a timeout.
-- **Cost.** A rail that really did take the money, and reported it badly,
-  leaves an order `authorised` and a budget that does not count it, which is
-  the same reconciliation D81 and D85 already leave to a person. A ledger
-  that throws for any reason other than the documented one, for example a
-  database, is not covered: the order would still read `paid` with nothing
-  recorded. The agent cannot tell an unreadable answer from a timeout by the
-  code; only the audit line and the server's `cause` say which.
+- **Why.** `capture` takes the hold in full (D52), so a hold the ledger could
+  not record would otherwise be taken first and found out afterwards. Before
+  capture, no money has moved. The comparison is there because a full
+  capture of a hold for any amount other than the one asked for takes a sum
+  the mandate did not check (D51). A zero hold passes the ledger's rule (the
+  ledger accepts a zero spend) and is refused by the comparison. Both rails
+  in the repo report the requested amount on the hold (`StubRail`, and
+  `StripeRail` builds it from the request), so the comparison refuses
+  nothing that either produces. An answer that cannot be acted on is treated
+  like no answer, which is D85's rule: no status is written on a guess.
+  `rail_unavailable` is the code D85 gives a payment whose state is unknown,
+  and the detail column says the rail did answer, so the line does not claim
+  a timeout. The after-capture check stays because a rail can hold a good
+  amount and report taking a bad one.
+- **Cost.** Each consequence below was checked against `merchant/pay.ts`.
+  - *Before capture:* no money has moved, but the hold the rail granted is
+    left uncaptured. The `Rail` interface has no void, so nothing releases
+    it; on `StubRail` it stays `authorised`. A held order cannot be retried
+    with its token (D126), and the cart is closed (D130), so the agent needs
+    a new cart and, for a held order, a human's yes again.
+  - *After capture:* by the rail's own answer the money has moved. The order
+    stays `authorised`, the ledger is not written, the audit line reads
+    `rail_unavailable`, `unreadable answer from capture`, and prints the
+    order's amount, not the rail's. The mandate's remaining budget is
+    overstated by the amount taken, so later orders can spend it again,
+    until a person reconciles.
+  - *A ledger that throws a plain `Error`* (a database, say) is not covered
+    by either check: the order is already `paid` and the `paid` line written
+    (D98), the ledger stays at zero, and the caller sees `internal_error`.
+  - The agent cannot tell an unreadable answer from a timeout by the code;
+    only the audit line and the server's `cause` say which.
+  - The check is the in-memory ledger's rule. Another `SpendLedger` with
+    other rules is not covered.
 
 ## D130 · Amends D64: an order closes its cart — PROPOSED (T12b)
 
@@ -3311,15 +3348,41 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
 - **Why.** D64's single use is per quote, and a second quote of an unchanged
   cart prices the same basket under a new id, so an agent could buy it twice
   with nothing but the budget in the way. D64 itself asked to be overruled on
-  this point. Closing at order creation, not at payment, is what covers held
+  this point, and this entry overrules D64's "the cart is left alone", which
+  D64 invited. Closing at order creation, not at payment, is what covers held
   orders: otherwise an agent could collect a confirmation token per quote of
   one cart, which D64 refused to allow per quote.
   `test/merchant/settlement-guards.test.ts` covers the paid, held, two-quote
-  and refused cases through the server.
+  and refused cases through the server, and `test/merchant/confirm-order.test.ts`
+  covers a declined card on the direct path.
 - **Cost.** Buying the same thing twice now takes a new cart. A declined card
   or a stuck order (D84, D85, D126) leaves its cart closed, so the agent
   rebuilds the cart as well as re-quoting. One more code that a client must
-  learn. The closed set is in memory, per server instance (D44). The agent's
-  comment listing `place_order`'s refusal codes (`agent/order.ts`) and
-  `docs/ARCHITECTURE.md` do not name `cart_closed`; both are outside this
-  task's directories.
+  learn. The closed set is in memory, per server instance (D44).
+  `docs/ARCHITECTURE.md` does not name `cart_closed`; it is outside T12b's
+  and T12c's directories. (T12c added it to the agent's comment listing
+  `place_order`'s refusal codes, `agent/order.ts`.)
+
+## D131 · A zero capture passes the after-capture check and marks the order paid — PROPOSED (T12c)
+
+- **Decision.** The after-capture check of D129 stays the ledger's rule,
+  `isNonNegativeMinorUnits`, which admits zero. A `capture` that reports
+  `amount_minor: 0` therefore marks the order `paid`, records a spend of 0,
+  and prints a `paid` line of `0 GBP`. T12c pins that with a test in
+  `test/merchant/settlement-guards.test.ts`, so a change to it is visible. A
+  zero *hold* is refused before capture by D129's comparison.
+- **Alternative.** Check the capture with `isPositiveMinorUnits` (D58), so a
+  zero capture is `rail_unavailable`, `unreadable answer from capture`, like a
+  negative one. Or compare the capture with the hold, which also refuses
+  zero, but refuses every partial capture too, and D87 records what the rail
+  took, which may be less.
+- **Why.** The T12c brief asks for the after-capture check to stay as it is,
+  as the second line of defence, and for the rule to be the ledger's own. The
+  ledger accepts a zero spend, and D87 accepts a capture of less than the
+  hold, of which zero is the limit. Refusing it would be a behaviour change
+  nobody has ruled.
+- **Cost.** An order can read `paid` when, by the rail's own answer, nothing
+  was taken. `StubRail` captures in full (D52), so it cannot produce this;
+  `StripeRail` reports Stripe's `amount_received`, which nothing in this repo
+  has seen at zero, and the test reaches the case only through
+  `ScriptedRail`. **This is the entry I would most like ruled.**
