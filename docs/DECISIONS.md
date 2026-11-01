@@ -3291,9 +3291,15 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   so a bad amount is found after the rail reports the money taken. Or no
   check: mark the order paid and let `recordSpend` throw, which leaves the
   order `paid`, a `paid` line and a ledger at zero, reported as
-  `internal_error`. Or check the hold with the ledger's rule only, without
-  the comparison. Or a new outcome word; `capture_unreadable` is eighteen
-  characters, longer than the sixteen-character outcome column (D95).
+  `internal_error`. Or record the spend before `markPaid`, so a ledger throw
+  leaves the order `authorised`, but by then the `paid` line is already
+  written (D98), so the log and the order would disagree instead. Or check
+  the hold with the ledger's rule only, without the comparison. Or a new
+  outcome word; `capture_unreadable` is eighteen characters, longer than the
+  sixteen-character outcome column (D95). Each alternative costs what this
+  entry avoids: the first two take the money before the bad amount is found,
+  the third disagrees in the log, the fourth captures a zero or larger hold,
+  and the fifth breaks the column.
 - **Why.** `capture` takes the hold in full (D52), so a hold the ledger could
   not record would otherwise be taken first and found out afterwards. Before
   capture, no money has moved. The comparison is there because a full
