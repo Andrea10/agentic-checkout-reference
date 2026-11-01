@@ -1,7 +1,7 @@
 /**
  * The demo, as a test.
  *
- * Four things are checked, in the order they matter:
+ * Five things are checked, in the order they matter:
  *
  * 1. **The two runs reach the two outcomes.** Run 1 is paid in one call; run
  *    2 is held for a human and then paid when the token comes back. That is
@@ -13,6 +13,10 @@
  *    the output reviewable in a pull request.
  * 4. **The audit log comes out on the stream the demo was handed**, rather
  *    than on a stream of its own choosing.
+ * 5. **Run 3's five attempts are refused, and move nothing** (T13). Each is
+ *    pinned to its refusal code, its reasons, the line it printed and the
+ *    audit lines it left, and the closing line is checked against the
+ *    ledgers and the rail logs it claims to read.
  *
  * T07c has landed, so the log holds two kinds of entry (D94): a mandate
  * check and a settlement. Three of the tests below exist because this demo
@@ -29,9 +33,20 @@
 import { describe, expect, it } from 'vitest';
 
 import { generateMandateKeyPair } from '../mandate/index.js';
-import { AGENT, MERCHANT, PRINCIPAL, money, pounds, runDemo } from './demo.js';
+import {
+  ADDED_FIELD,
+  AGENT,
+  ATTEMPTS,
+  MERCHANT,
+  OTHER_MERCHANT,
+  PRINCIPAL,
+  RUN_THREE,
+  money,
+  pounds,
+  runDemo,
+} from './demo.js';
 
-import type { DemoReport } from './demo.js';
+import type { AttemptName, AttemptReport, DemoReport } from './demo.js';
 import type { MandateKeyPair, OutputStream } from '../mandate/index.js';
 
 /** The basket both runs buy: the two cheapest products in the catalogue. */
@@ -117,6 +132,195 @@ describe('run 2: the README mandate trips the human-confirm step', () => {
     expect(text).toContain('THE HUMAN’S STEP');
     expect(text).toContain('this is the principal, not the agent');
     expect(text).toContain(`${PRINCIPAL} now calls confirm_order with the token`);
+  });
+});
+
+/** One attempt's printed section: its heading down to the next blank line. */
+function attemptSection(text: string, index: number): string {
+  const heading = `ATTEMPT ${String(index + 1)} OF ${String(ATTEMPTS.length)} — `;
+  const start = text.indexOf(heading);
+  expect(start, `no "${heading}" in the output`).toBeGreaterThanOrEqual(0);
+  const end = text.indexOf('\n\n', start);
+  return text.slice(start, end < 0 ? undefined : end);
+}
+
+/** One attempt's report, by name. */
+function attemptOf(report: DemoReport, name: AttemptName): AttemptReport {
+  const found = report.three.attempts.find((entry) => entry.name === name);
+  expect(found, `no attempt ${name}`).toBeDefined();
+  return found as AttemptReport;
+}
+
+/** The audit line a run 3 refusal writes, in `formatEntry`'s columns. */
+function refuseLine(amount: number, merchant: string, reason: string): string {
+  return `2026-10-25T09:00:00.000Z  refuse            ${String(amount)} GBP  ${AGENT} -> ${merchant}  mandate ${RUN_THREE.mandate_id}  ${reason}`;
+}
+
+/**
+ * What every refused attempt has to leave: no rail call anywhere, and the
+ * budget where it was. Checked per attempt so that a failure names it.
+ */
+function expectNoMoneyMoved(attempt: AttemptReport): void {
+  expect(attempt.railEntries).toEqual([]);
+  expect(attempt.spentAfterMinor).toBe(attempt.spentBeforeMinor);
+}
+
+describe('run 3: five attempts to spend past the mandate', () => {
+  it('makes the five attempts in the order the task names them', async () => {
+    const { report } = await demo();
+
+    expect(report.three.attempts.map((entry) => entry.name)).toEqual([...ATTEMPTS]);
+    expect(ATTEMPTS).toHaveLength(5);
+  });
+
+  it('pays two orders between attempts 1 and 2, which leave 910 pence of the budget', async () => {
+    const { report, text } = await demo();
+
+    expect(report.three.paidOrderIds).toEqual(['order_000001', 'order_000002']);
+    expect(text).toContain(
+      `Mandate budget: ${money(4090)} spent of ${money(5000)}, ${money(910)} left`,
+    );
+  });
+
+  it('attempt 1: an order over the per-order cap is refused for that cap alone', async () => {
+    const { report, text } = await demo();
+    const attempt = attemptOf(report, 'per_order_cap');
+
+    expect(attempt.code).toBe('mandate_refused');
+    expect(attempt.reasons).toEqual(['per_transaction_cap_exceeded']);
+    expect(attempt.auditLines).toEqual([
+      refuseLine(2750, MERCHANT, 'per_transaction_cap_exceeded'),
+    ]);
+    expectNoMoneyMoved(attempt);
+    expect(attempt.spentBeforeMinor).toBe(0);
+
+    const section = attemptSection(text, 0);
+    expect(section).toContain('refused      mandate_refused [per_transaction_cap_exceeded]');
+    expect(section).toContain(
+      "why          2750 is above this mandate's per-transaction cap of 2500 GBP",
+    );
+    expect(section).toContain(`  ${refuseLine(2750, MERCHANT, 'per_transaction_cap_exceeded')}`);
+  });
+
+  it('attempt 2: the basket of runs 1 and 2 is refused once the budget left is below it', async () => {
+    const { report, text } = await demo();
+    const attempt = attemptOf(report, 'remaining_budget');
+
+    expect(attempt.code).toBe('mandate_refused');
+    expect(attempt.reasons).toEqual(['budget_exceeded']);
+    expect(attempt.auditLines).toEqual([refuseLine(2045, MERCHANT, 'budget_exceeded')]);
+    expectNoMoneyMoved(attempt);
+    expect(attempt.spentBeforeMinor).toBe(4090);
+
+    const section = attemptSection(text, 1);
+    expect(section).toContain('refused      mandate_refused [budget_exceeded]');
+    expect(section).toContain(
+      "why          2045 is more than the 910 GBP left of this mandate's total cap of 5000",
+    );
+    expect(section).toContain(`  ${refuseLine(2045, MERCHANT, 'budget_exceeded')}`);
+  });
+
+  it('attempt 3: the same mandate at another merchant is refused there, and logged there', async () => {
+    const { report, text } = await demo();
+    const attempt = attemptOf(report, 'wrong_merchant');
+
+    expect(attempt.code).toBe('mandate_refused');
+    // The second merchant trusts the same issuer, so the signature holds and
+    // the merchant is the only thing wrong.
+    expect(attempt.reasons).toEqual(['merchant_mismatch']);
+    expect(attempt.auditLines).toEqual([refuseLine(2045, OTHER_MERCHANT, 'merchant_mismatch')]);
+    expectNoMoneyMoved(attempt);
+
+    const section = attemptSection(text, 2);
+    expect(section).toContain('refused      mandate_refused [merchant_mismatch]');
+    expect(section).toContain(
+      `why          this mandate is good at ${MERCHANT}, not at ${OTHER_MERCHANT}`,
+    );
+    expect(section).toContain(`  ${refuseLine(2045, OTHER_MERCHANT, 'merchant_mismatch')}`);
+  });
+
+  it('attempt 4: a replayed order is refused before the mandate check, and leaves no audit line', async () => {
+    const { report, text } = await demo();
+    const attempt = attemptOf(report, 'replay');
+
+    // D127: the quote is the guard. D65 and D127: a refusal before the
+    // mandate check writes nothing, so "none" is the true audit line.
+    expect(attempt.code).toBe('quote_already_ordered');
+    expect(attempt.reasons).toEqual([]);
+    expect(attempt.auditLines).toEqual([]);
+    expectNoMoneyMoved(attempt);
+
+    const section = attemptSection(text, 3);
+    expect(section).toContain('tries        place_order again with quote_000003, which order_000002 paid');
+    expect(section).toContain('refused      quote_already_ordered');
+    expect(section).toContain(
+      'why          quote quote_000003 has already been ordered as order_000002 (paid)',
+    );
+    expect(section).toContain(
+      'audit line   none: refused before the mandate check (D65, D127)',
+    );
+  });
+
+  it('attempt 5: a field added after signing breaks the signature, on a basket the budget covers', async () => {
+    const { report, text } = await demo();
+    const attempt = attemptOf(report, 'field_added');
+
+    // 895 is within the 910 left, so the signature is the only reason.
+    expect(attempt.spentBeforeMinor).toBe(4090);
+    expect(5000 - attempt.spentBeforeMinor).toBeGreaterThanOrEqual(895);
+    expect(attempt.code).toBe('mandate_refused');
+    expect(attempt.reasons).toEqual(['signature_invalid']);
+    expect(attempt.auditLines).toEqual([refuseLine(895, MERCHANT, 'signature_invalid')]);
+    expectNoMoneyMoved(attempt);
+
+    const section = attemptSection(text, 4);
+    expect(section).toContain(`"${Object.keys(ADDED_FIELD)[0] ?? ''}": 5000`);
+    expect(section).toContain('refused      mandate_refused [signature_invalid]');
+    expect(section).toContain(
+      'why          the mandate was not signed by the expected issuer, or has been changed since',
+    );
+    expect(section).toContain(`  ${refuseLine(895, MERCHANT, 'signature_invalid')}`);
+  });
+
+  it('the invariant line: five refused, and no money moved by them, read off the ledger and the rail log', async () => {
+    const { report, text } = await demo();
+    const { attempts, paidOrderIds, railLog, spentMinor } = report.three;
+
+    // Per attempt, from just before it to just after it, at both merchants.
+    expect(attempts.every((entry) => entry.code !== undefined)).toBe(true);
+    for (const entry of attempts) {
+      expectNoMoneyMoved(entry);
+    }
+
+    // And from the whole run's logs: every rail call there was belongs to
+    // the two orders paid between attempts 1 and 2, and the ledger holds
+    // exactly those two and nothing else.
+    expect(railLog.map((entry) => `${entry.call} ${entry.outcome} ${entry.order_ref ?? '-'}`)).toEqual([
+      'authorise ok order_000001',
+      'capture ok order_000001',
+      'authorise ok order_000002',
+      'capture ok order_000002',
+    ]);
+    expect(railLog.every((entry) => paidOrderIds.includes(entry.order_ref ?? ''))).toBe(true);
+    expect(spentMinor).toBe(2 * 2045);
+
+    expect(text).toContain(
+      `5 attempts, 5 refused. Money moved by them: ${money(0)}.`,
+    );
+    expect(text).toContain(`Rail calls they caused: 0. Added to the ledger: ${money(0)}.`);
+
+    // The printed numbers are the ones the logs give, not a sentence that
+    // happens to agree with them today.
+    const line = /(\d+) attempts, (\d+) refused\. Money moved by them: £\d+\.\d\d \((\d+) pence\)\./.exec(text);
+    expect(line).not.toBeNull();
+    if (line === null) return;
+    const captured = attempts
+      .flatMap((entry) => entry.railEntries)
+      .filter((entry) => entry.call === 'capture' && entry.outcome === 'ok')
+      .reduce((sum, entry) => sum + (entry.amount_minor ?? 0), 0);
+    expect(Number(line[1])).toBe(attempts.length);
+    expect(Number(line[2])).toBe(attempts.filter((entry) => entry.code !== undefined).length);
+    expect(Number(line[3])).toBe(captured);
   });
 });
 
