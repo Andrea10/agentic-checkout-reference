@@ -3336,11 +3336,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   run 1's 2045 already spent. Or run 2's README mandate, whose threshold of
   2000 is below the 2045 basket.
 - **Why.** The row's "under the same mandate" is read as one mandate for the
-  five attempts. With a threshold of 3000, every order of at most 2500 the
-  policy allows is paid in the `place_order` call itself (D88), so the two
-  setup orders (D142) need no human step, and a refusal comes from the policy
-  or the quote guard and nothing else. Under run 2's threshold each setup
-  order would be held and need a `confirm_order`. An id of its own keeps run
+  five attempts. With a threshold of 3000, an order of at most 2500 that the
+  policy allows goes to the rail in the `place_order` call itself (D88), so
+  the two setup orders (D142) need no human step and no attempt waits on one.
+  Under run 2's threshold each setup order would be held and need a
+  `confirm_order`. An id of its own keeps run
   3's audit lines from being read as run 1's. A merchant of its own means run
   3 cannot change what runs 1 and 2 print: their output is byte-identical to
   main's (PROGRESS.md).
@@ -3437,7 +3437,9 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   refused it.
 - **Why.** On a basket the untampered mandate covers, the signature is
   visibly the only thing wrong. The field's name says what a tamperer would
-  want. No code in `mandate/`, `merchant/`, `agent/` or `rail/` reads it.
+  want. No code in `mandate/`, `merchant/`, `agent/` or `rail/` gives it a
+  meaning; the canonicaliser serialises it like any other field, which is
+  why the signature breaks (D23).
 - **Cost.** The name could suggest the merchant knows such a field. The
   attempt depends on the wire schema passing unknown fields through to
   `verify()` (D67). Mutation M5 in PROGRESS.md shows that a schema which
@@ -3453,7 +3455,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   solo runs, with a 3x margin. The slowest of the ten took 1182 ms, so the
   rule gives 3546 ms (4869 ms from the slowest of the five full-suite runs,
   1623 ms). Both are below the default, so the rule raises nothing. Or
-  60000 ms, as the file's spawning hooks have. Or `testTimeout` in the
+  60000 ms, as the file's spawning hook and its legacy-handshake test have. Or `testTimeout` in the
   Vitest config, which is outside this task's directories and would change
   every test.
 - **Why.** The row says raise it. Every measured run here passed at the

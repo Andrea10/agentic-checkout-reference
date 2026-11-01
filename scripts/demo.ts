@@ -988,7 +988,11 @@ async function attempt(
     p.field('NOT REFUSED', end.what, FIELD);
   }
   if (auditLines.length === 0) {
-    p.field('audit line', 'none: refused before the mandate check (D65, D127)', FIELD);
+    p.field(
+      'audit line',
+      end.refused ? 'none: refused before the mandate check (D65, D127)' : 'none',
+      FIELD,
+    );
   } else {
     p.item(count(auditLines.length, 'audit line') + ':');
     for (const line of auditLines) {
@@ -1023,9 +1027,9 @@ async function attempt(
  * read off the audit log, the rail log and the ledger, never written down.
  *
  * The budget attempt needs most of the budget gone, so two orders the mandate
- * covers are paid first. One of them is the order the replay resends. Those
- * two are the only money run 3 moves, and the closing line measures the five
- * attempts from after them.
+ * covers are paid between attempts 1 and 2 (D142). The second is the order
+ * the replay resends. Each attempt is measured on its own, from just before
+ * it to just after it, and the closing line sums those measurements.
  */
 async function runThree(
   p: Printer,
@@ -1041,9 +1045,10 @@ async function runThree(
 
   p.run('RUN 3 — five attempts to spend past the mandate');
   describeMandate(p, mandate);
-  p.item('The same limits as run 1, under a mandate id of its own. Each');
-  p.item('attempt below is the agent presenting this mandate, and each one is');
-  p.item('printed with what the merchant answered and what it left behind.');
+  p.item('The same limits as run 1, under a mandate id of its own. In each');
+  p.item('attempt below the agent presents this mandate (in attempt 5, with a');
+  p.item('field added), and each is printed with what the merchant answered');
+  p.item('and what it left behind.');
 
   const cap = ['prod_gallowbrook_cafetiere'];
   const pair = ['prod_elderflint_notebook', 'prod_dunlin_merino_socks'];
@@ -1093,7 +1098,7 @@ async function runThree(
   p.item(
     `Mandate budget: ${money(spent)} spent of ${money(mandate.amount_cap_minor)}, ${money(mandate.amount_cap_minor - spent)} left`,
   );
-  p.item('These are the only payments in run 3. Each attempt is measured on');
+  p.item('Run 3 means to pay nothing else. Each attempt below is measured on');
   p.item('its own, from just before it to just after it.');
 
   const left = mandate.amount_cap_minor - spent;
