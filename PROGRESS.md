@@ -78,3 +78,4 @@ T12b mutations: 11 applied and restored, each failed at least one new test (list
 T12b demo check: npm run demo twice on a fresh clone of main and twice on a fresh clone of task/T12b, stdout sha256 308761f0…6f9b for all four, stderr empty for all four 2026-10-31T01:33:01Z
 T12b fresh clone of task/T12b at 4e28f22: npm ci, lint, build, typecheck, test (676 passed, 1 skipped) all exit 0 2026-10-31T01:33:01Z
 T12b PR #32 opened 2026-10-31T01:33:55Z
+chore t12c-row PR #33 opened 2026-11-01T00:03:43Z
