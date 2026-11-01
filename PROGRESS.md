@@ -79,3 +79,16 @@ T12b demo check: npm run demo twice on a fresh clone of main and twice on a fres
 T12b fresh clone of task/T12b at 4e28f22: npm ci, lint, build, typecheck, test (676 passed, 1 skipped) all exit 0 2026-10-31T01:33:01Z
 T12b PR #32 opened 2026-10-31T01:33:55Z
 chore t12c-row PR #33 opened 2026-11-01T00:03:43Z
+T13 claimed 2026-11-01T11:40:05Z
+T13 plan 1/5: run 3 in scripts/demo.ts, one mandate (run 1's limits, its own id), a fresh merchant, the frozen clock; agent attempts go through runPlan and the agent's placeOrder, not hand-built tool calls 2026-11-01T11:40:05Z
+T13 plan 2/5: five attempts in the row's order (per-order cap, remaining budget, wrong merchant, replay, field added after signing); two paid orders before attempt 2 so the budget is nearly spent; each attempt run against the code first and recorded here before it is printed 2026-11-01T11:40:05Z
+T13 plan 3/5: each attempt prints its refusal code, reasons and the audit lines it added (or none); a closing line computed from both merchants' ledgers and rail logs before and after the attempts, asserted by a test 2026-11-01T11:40:05Z
+T13 plan 4/5: tests in scripts/demo.test.ts, one per attempt plus the invariant line, each mutated to fail and restored; runs 1 and 2 output byte-identical to main's 2026-11-01T11:40:05Z
+T13 plan 5/5: flake check (full suite x5, protocol.test.ts x10), raise one timeout in test/agent/protocol.test.ts, D140+ PROPOSED only for real choices, fresh-clone proof, PR 2026-11-01T11:40:05Z
+T13 probe (real code, stub rail, frozen clock, mandate caps 5000 total / 2500 per order / threshold 3000): attempt 1 cafetiere 2750 on an empty ledger: mandate_refused [per_transaction_cap_exceeded], one refuse line, no rail call, ledger 0 -> 0, no order, cart left open 2026-11-01T11:41:40Z
+T13 probe: two paid orders of 2045 first (allow+paid lines, authorise+capture each), ledger 4090, both carts closed (D130) 2026-11-01T11:41:40Z
+T13 probe: attempt 2 notebook+socks 2045 with 910 left: mandate_refused [budget_exceeded], one refuse line, no rail call, ledger 4090 -> 4090, no order, cart open 2026-11-01T11:41:40Z
+T13 probe: attempt 3 same mandate at a second merchant with id merchant-other (same issuer key): mandate_refused [merchant_mismatch], one refuse line in that merchant's log, no rail call, its ledger 0 -> 0, no order, cart open 2026-11-01T11:41:40Z
+T13 probe: attempt 4 place_order resent with the second paid order's quote: quote_already_ordered, no audit line (D65, D127), no rail call, ledger 4090 -> 4090, order_000002 still paid, its cart still closed 2026-11-01T11:41:40Z
+T13 probe: attempt 5 the mandate plus one unsigned field (extra_budget_minor) on a notebook basket of 895: mandate_refused [signature_invalid], one refuse line, no rail call, ledger 4090 -> 4090, no order, cart open 2026-11-01T11:41:40Z
+T13 differs from the row: the row says every attempt is printed "with its refusal code and audit line"; the replay has none, because D65, D99 and D127 (ACCEPTED) rule that a refusal before the mandate check writes nothing. Run 3 prints "none" for it and says why; T12a's NEEDS-ANDREA on the same point is still open 2026-11-01T11:41:40Z
