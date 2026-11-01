@@ -3323,3 +3323,143 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   comment listing `place_order`'s refusal codes (`agent/order.ts`) and
   `docs/ARCHITECTURE.md` do not name `cart_closed`; both are outside this
   task's directories.
+
+## D140 · Run 3 has a mandate of its own, with run 1's limits, at a merchant of its own — PROPOSED (T13)
+
+- **Decision.** Run 3 issues one mandate, `RUN_THREE`, for all five
+  attempts: the README's caps (5000 in total, 2500 per order, GBP, the same
+  window) and run 1's `human_confirm_above_minor` of 3000, under the id
+  `33333333-3333-4333-8333-333333333333`. It starts its own merchant, as runs
+  1 and 2 do, with the same frozen clock, so its ledger, audit log, stores and
+  rail log start empty.
+- **Alternative.** Reuse run 1's mandate and merchant, so run 3 starts with
+  run 1's 2045 already spent. Or run 2's README mandate, whose threshold of
+  2000 is below the 2045 basket.
+- **Why.** The row's "under the same mandate" is read as one mandate for the
+  five attempts. With a threshold of 3000, every order of at most 2500 the
+  policy allows is paid in the `place_order` call itself (D88), so the two
+  setup orders (D142) need no human step, and a refusal comes from the policy
+  or the quote guard and nothing else. Under run 2's threshold each setup
+  order would be held and need a `confirm_order`. An id of its own keeps run
+  3's audit lines from being read as run 1's. A merchant of its own means run
+  3 cannot change what runs 1 and 2 print: their output is byte-identical to
+  main's (PROGRESS.md).
+- **Cost.** A third mandate id in the output. If the row meant run 1's
+  mandate itself, run 3 needs one paid order fewer and loses the separation
+  above.
+
+## D141 · The wrong-merchant attempt is the same mandate presented at a second merchant — PROPOSED (T13)
+
+- **Decision.** Run 3 starts a second merchant whose own id is
+  `merchant-other`, configured through `configFromEnvironment` with the same
+  issuer key as `merchant-demo`, and with its own stores, policy, ledger,
+  audit log and rail. The agent shops there and presents run 3's mandate. It
+  is refused `mandate_refused [merchant_mismatch]`, and the refuse line is in
+  `merchant-other`'s audit log, which is the one the attempt prints.
+- **Alternative.** A second mandate, signed by the same issuer for
+  `merchant-other`, presented at `merchant-demo`. One merchant and one audit
+  log, but then attempt 3 is not under the mandate the other four use.
+- **Why.** It keeps one mandate across the five attempts (D140), and it is
+  the case the check exists for: authority granted for one shop taken to
+  another. The policy compares the mandate's `merchant` with the merchant's
+  own configured id (D60), not with anything the agent sends. Because the
+  second merchant trusts the same issuer, the signature holds and
+  `merchant_mismatch` is the only reason.
+- **Cost.** Run 3 has two audit logs and two rail logs, and the closing
+  line has to read both (D142). Each merchant keeps its own ledger (D44), so
+  `merchant-other` would see the whole 5000 cap as unspent. Run 3 does not
+  say that, and no attempt depends on it.
+
+## D142 · Two paid orders come between attempts 1 and 2, and each attempt is measured on its own — PROPOSED (T13)
+
+- **Decision.** Attempt 1 (2750, over the 2500 per-order cap) runs on an
+  empty ledger. Two orders of 2045 are then paid at `merchant-demo`, which
+  leaves 910 of the 5000. Attempts 2 to 5 follow. Each attempt is measured
+  from just before it to just after it: the audit lines added at the
+  merchant it was made at, the rail log entries added at both merchants, and
+  the mandate's spend summed over both. The closing line sums those windows.
+  "Money moved by them" is the total `amount_minor` of `capture` entries with
+  outcome `ok` in the windows. The rail call count and the ledger change are
+  printed beside it. `scripts/demo.test.ts` asserts each window is empty and
+  the spend unchanged. It also asserts that the run's whole rail log is the
+  four calls of the two paid orders and that the ledger holds 4090.
+- **Alternative.** Pay the two orders first, then run the five attempts back
+  to back and measure them in one window. Then attempt 1's 2750 is also above
+  the 910 left, and it is refused for `per_transaction_cap_exceeded` and
+  `budget_exceeded` together. Or give run 3 a smaller total cap, which D140
+  rules out.
+- **Why.** The budget attempt needs an amount of at most 2500 (or the cap
+  refuses it as well) and more than what is left. One order can spend at most
+  2500, which leaves at least 2500, so it takes two orders. Running attempt 1
+  before them means each attempt is refused for the one reason it is there
+  to show.
+- **Cost.** Run 3 does move money: 4090 pence, on two orders that are not
+  attempts. The output says so, and the closing line names only the five.
+  The windows are correct only because the attempts are awaited one after
+  another; run concurrently, one attempt's rail calls could land in
+  another's window.
+
+## D143 · The replay is `place_order` resent with a paid order's quote, and its audit line prints as none — PROPOSED (T13)
+
+- **Decision.** Attempt 4 calls the agent's own `placeOrder` again with the
+  quote of the second paid order (`quote_000003`, ordered as
+  `order_000002`). It is refused `quote_already_ordered`. The attempt prints
+  `audit line   none: refused before the mandate check (D65, D127)`, and the
+  test asserts that it added no audit line.
+- **Alternative.** One of D127's other replay paths, `confirm_order` with a
+  spent token or a paid order's token. Run 3 holds no order (D140), so that
+  would need a held order and a principal step that the other attempts do not
+  have. Or print an audit line for the replay, which needs a third entry kind
+  in `mandate/` (D99's alternative), outside this task's directories.
+- **Why.** `place_order` is the only call in which the agent presents its
+  mandate, and the planner never calls `confirm_order` (D74). D127 names the
+  quote as the guard against this replay. D65, D99 and D127 are ACCEPTED, and
+  they say a refusal before the mandate check writes nothing, so "none" is
+  the true line.
+- **Cost.** The row asks for each attempt to be printed with its audit line,
+  and the replay has none. This is the same open question as T12a's
+  NEEDS-ANDREA in PROGRESS.md. A second guard sits behind the quote guard:
+  with `assertQuoteUnused` removed, the replay is refused `cart_closed`
+  (D130). The demo would then print a different code and still move no
+  money, and only the replay test notices (mutation M4 in PROGRESS.md).
+
+## D144 · The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers — PROPOSED (T13)
+
+- **Decision.** Attempt 5 presents run 3's mandate with one field added
+  after signing, `"extra_budget_minor": 5000`, for the notebook at 895
+  pence, which is within the 910 left. It is refused
+  `mandate_refused [signature_invalid]`.
+- **Alternative.** Change a signed field, for example raise
+  `amount_cap_minor`. That is tampering too, but the row asks for a field
+  added. Or the 2045 basket. The signature gate stops the policy's pass
+  before the budget is looked at (`mandate/policy.ts`), so the reason would
+  still be `signature_invalid` alone. A reader could still think the budget
+  refused it.
+- **Why.** On a basket the untampered mandate covers, the signature is
+  visibly the only thing wrong. The field's name says what a tamperer would
+  want. No code in `mandate/`, `merchant/`, `agent/` or `rail/` reads it.
+- **Cost.** The name could suggest the merchant knows such a field. The
+  attempt depends on the wire schema passing unknown fields through to
+  `verify()` (D67). Mutation M5 in PROGRESS.md shows that a schema which
+  stripped the field would hand the policy a mandate that verifies, and the
+  order would be paid.
+
+## D145 · The tool-list test's timeout is 15 s — PROPOSED (T13)
+
+- **Decision.** "reads the tool list over the negotiated connection" in
+  `test/agent/protocol.test.ts` gets a 15000 ms timeout in place of Vitest's
+  default 5000 ms. Nothing else in the file changes.
+- **Alternative.** The brief's rule: the lowest value that passed all ten
+  solo runs, with a 3x margin. The slowest of the ten took 1182 ms, so the
+  rule gives 3546 ms (4869 ms from the slowest of the five full-suite runs,
+  1623 ms). Both are below the default, so the rule raises nothing. Or
+  60000 ms, as the file's spawning hooks have. Or `testTimeout` in the
+  Vitest config, which is outside this task's directories and would change
+  every test.
+- **Why.** The row says raise it. Every measured run here passed at the
+  default, at load averages between 8.7 and 20.4. The overrun the row cites
+  happened at a load average of about 635 (T12a, PR #30), and was not
+  reproduced. 15000 ms is 3x the 5000 ms the test overran then.
+- **Cost.** The number is anchored on one observed overrun, not on a
+  measured duration under that load. A heavier load can still overrun it.
+  A hung call now takes 15 s to fail instead of 5.
