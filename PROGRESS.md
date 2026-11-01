@@ -79,7 +79,7 @@ T12b demo check: npm run demo twice on a fresh clone of main and twice on a fres
 T12b fresh clone of task/T12b at 4e28f22: npm ci, lint, build, typecheck, test (676 passed, 1 skipped) all exit 0 2026-10-31T01:33:01Z
 T12b PR #32 opened 2026-10-31T01:33:55Z
 chore t12c-row PR #33 opened 2026-11-01T00:03:43Z
-T12c claimed 2026-11-01T11:38:00Z
+T12c claimed 2026-11-01T11:39:50Z
 T12c failing first: on origin/main with the new tests copied in, 9 of the new tests fail (the 4 direct-path and 4 held-path hold cases are paid instead of refused; the settle() cause test gets no throw); the cart-closed-on-decline, negative-capture and zero-capture tests pass on main and are pinned by mutation instead 2026-11-01T11:51:26Z
 T12c mutations: 11 applied and restored, each failed at least one new test (list in the PR) 2026-11-01T11:51:26Z
 T12c audit lines: main's 676 tests, with AuditLog.print instrumented, print 151 lines (58 settlement lines) against main's code and against this branch's code, sorted byte-identical 2026-11-01T11:51:26Z
