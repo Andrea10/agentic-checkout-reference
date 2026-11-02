@@ -559,16 +559,23 @@ rules as the alternative to loosening this.
 (D128).** `settle()` spends a held order's token immediately before
 `rail.authorise`, with no `await` between the check and the mark
 (`merchant/pay.ts`, `OrderStore.spendToken` in `merchant/order.ts`). Of two
-confirmations in flight, the second is refused `confirmation_token_spent`:
-in `requireConfirmable` if the first has already been sent to the rail, or in
-`spendToken` if both passed that check first, in which case its mandate check
-line is already in the log. Either way it never reaches the rail and writes no
-settlement line (D99). `test/merchant/settlement-guards.test.ts` runs two
+confirmations in flight through the server, the second is refused
+`confirmation_token_spent` in `requireConfirmable`: `confirmOrder` has no
+`await` between `requireConfirmable` and `settle()`
+(`merchant/confirm-order.ts`), and `settle()` spends the token before its first
+`await` (`merchant/pay.ts`), so the first call runs to the rail before the
+second starts. The second is refused before the mandate check, so it writes no
+mandate check line, never reaches the rail, and writes no settlement line
+(D99). The refusal in `spendToken` is a second line that only a direct
+`OrderStore` call reaches. `test/merchant/settlement-guards.test.ts` runs two
 `confirm_order` calls through the server against a rail held open, and
-asserts one `authorise`, one `capture`, one payment and one
-`confirmation_token_spent`; `test/merchant/order.test.ts` pins the refusal in
-`spendToken`. The spent set is one process's memory, so two server instances
-do not share it (D44, D63). What remains true: **the rail interface has no
+asserts one `authorise`, one `capture`, one payment, one
+`confirmation_token_spent` and one settlement line;
+`test/merchant/order.test.ts` calls `OrderStore` directly to pin the refusal in
+`spendToken`. The spent set lives on the merchant's `OrderStore`
+(`merchant/order.ts`), so every server instance built on one merchant state
+shares it, as the demo's two do (D101); it is in memory, so it is not shared
+across processes or machines (D44, D63). What remains true: **the rail interface has no
 void and no cancel** (`rail/types.ts`, D52, D81), so a hold is left
 uncaptured when the attempt it belongs to is refused after `authorise`, as a
 hold the settlement guards refuse is (D129). A real card authorisation sits

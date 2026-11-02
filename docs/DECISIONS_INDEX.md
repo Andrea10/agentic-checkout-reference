@@ -52,6 +52,8 @@ genuinely needs navigating:
 | D62 | D88 | `approved` left the wire; `place_order` answers `paid` |
 | D63 | D82 | a held order got a fifteen-minute expiry |
 | D106 | D116 | the two demo runs differ in two mandate fields, not one |
+| D84, by a pointer line | D126 | an attempt whose `authorise` throws has reached the rail, so it spends the token; a later attempt is `confirmation_token_spent` |
+| D85, by a pointer line | D126 | the order keeps its state when `authorise` throws, but its token is spent, so a retry with it cannot authorise again |
 | D126 | D128 | the token is spent as its attempt is sent to the rail, not after `authorise` throws |
 | D85 | D129 | a rail answer whose amount cannot be acted on is also `rail_unavailable`, checked before capture and after |
 | D129 | D131 | after capture, the amount must also equal the hold, zero included |
@@ -88,9 +90,10 @@ The file is ordered by task and not by number, which is why D58 and D59 sit
 before D50, and D90 to D93 before D80. It is append-only: a range was allotted
 while another task was in review.
 
-The amendment table has fourteen rows. T10 wrote nine, not eight, because
+The amendment table has sixteen rows. T10 wrote nine, not eight, because
 review round 1 of that task found a ninth: D106's claim about the demo's two
-mandates. The last five are T12b's and T12c's (D128 to D131). That is a
+mandates. The last seven are T12a's, T12b's and T12c's (D126 to D131); the
+two by D126 amend D84 and D85 by a pointer line, as D130 amends D84. That is a
 fifth instance of the class D115 reports — a ruled decision the shipped code
 no longer matches — and the fourth entry in this file to be corrected by
 appending rather than editing.
