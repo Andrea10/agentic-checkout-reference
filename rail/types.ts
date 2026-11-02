@@ -81,7 +81,10 @@ export interface Capture {
   readonly authorisation_id: string;
   /** Carried through from the authorisation. */
   readonly order_ref: string;
-  /** The amount taken, always the full authorised amount. */
+  /**
+   * The amount taken. The rail must report the full authorised amount, and
+   * `settle()` refuses any other (D131).
+   */
   readonly amount_minor: MinorUnits;
   /** Currency of `amount_minor`. */
   readonly currency: CurrencyCode;
