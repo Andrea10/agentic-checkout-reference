@@ -854,7 +854,7 @@ export interface AttemptReport {
   readonly auditLines: readonly string[];
   /** The rail log entries the attempt caused, across both merchants. */
   readonly railEntries: readonly RailLogEntry[];
-  /** Spent under the mandate at that merchant, before and after. */
+  /** Spent under the mandate, summed over both merchants, before and after. */
   readonly spentBeforeMinor: number;
   readonly spentAfterMinor: number;
 }
