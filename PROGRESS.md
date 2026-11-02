@@ -174,3 +174,4 @@ NEEDS-ANDREA (T14a, not fixed, outside the row): docs/PRD.md:77 S2 says "The dem
 NEEDS-ANDREA (T14a, not fixed, outside the row): docs/SEQUENCE.md:177-181 says "Neither run shows a refusal" and calls the refusal suite Stage 2's future T12; run 3 shows five refusals and T12a is merged. Also docs/SEQUENCE.md:3 "The two paths npm run demo shows" 2026-11-02T16:58:30Z
 NEEDS-ANDREA (T14a, not fixed, outside the row): scripts/demo.ts:1271 title "an agent buys something, twice" and :1273-1275 intro name runs 1 and 2 only, while the demo has three runs (code; output pinned by tests) 2026-11-02T16:58:30Z
 T14a proof: npm ci, lint, build, typecheck exit 0; test 698 passed 1 skipped, the same as main 3bf9605; npx tsx scripts/demo.ts x3 byte-identical (sha1 82b7976c…); throwaway link/number check (scratchpad, not committed) ALL PASS 2026-11-02T16:58:30Z
+T14a PR #38 opened 2026-11-02T16:59:29Z
