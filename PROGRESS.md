@@ -121,3 +121,4 @@ T13 fix round after pre-review of 7ac4058, pushed at head 7f3b35b: c1cfb74 comme
 chore post-T13 PR #36 opened 2026-11-02T12:23:42Z
 chore post-T13 PR #36 round 2: ARCHITECTURE.md stale passages fixed at b177b18 (add_to_cart codes, place_order cart_closed step, D128 concurrent confirm, rail_answer, three demo runs, 137 decisions); ci, lint, build, typecheck exit 0, test 698 passed 1 skipped 2026-11-02T12:35:01Z
 chore post-T13 PR #36 round 3: pre-review findings fixed at b15ea30 (spent set shared by servers on one merchant state, second concurrent confirm refused in requireConfirmable, amendment rows D84/D85 by D126, sixteen rows); fresh clone: npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped; index 137/137/0; demo sha256 58bdd3f6… on head and main 2026-11-02T16:23:45Z
+chore t14-rows PR #37 opened 2026-11-02T16:48:10Z
