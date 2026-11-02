@@ -843,7 +843,11 @@ export const ATTEMPTS = [
 
 export type AttemptName = (typeof ATTEMPTS)[number];
 
-/** What one attempt left behind, read off the merchant it was made at. */
+/**
+ * What one attempt left behind. The code, reasons and audit lines are read off
+ * the merchant it was made at; the rail entries and the spend cover both
+ * merchants.
+ */
 export interface AttemptReport {
   readonly name: AttemptName;
   /** The merchant's refusal code, or undefined if the attempt was not refused. */
