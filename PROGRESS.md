@@ -122,3 +122,47 @@ chore post-T13 PR #36 opened 2026-11-02T12:23:42Z
 chore post-T13 PR #36 round 2: ARCHITECTURE.md stale passages fixed at b177b18 (add_to_cart codes, place_order cart_closed step, D128 concurrent confirm, rail_answer, three demo runs, 137 decisions); ci, lint, build, typecheck exit 0, test 698 passed 1 skipped 2026-11-02T12:35:01Z
 chore post-T13 PR #36 round 3: pre-review findings fixed at b15ea30 (spent set shared by servers on one merchant state, second concurrent confirm refused in requireConfirmable, amendment rows D84/D85 by D126, sixteen rows); fresh clone: npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped; index 137/137/0; demo sha256 58bdd3f6… on head and main 2026-11-02T16:23:45Z
 chore t14-rows PR #37 opened 2026-11-02T16:48:10Z
+T14a claimed 2026-11-02T16:55:53Z
+T14a preflight: no open halt issue; origin/main 3bf9605 contains PR #36 (eb14b46) and PR #37 (3bf9605); TASKS.md:33 is the T14a row; npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped (31 files, 1 skipped) 2026-11-02T16:55:53Z
+T14a inventory of README.md at 3bf9605, before any edit (T true, S stale, U unverifiable) 2026-11-02T16:55:53Z
+
+| README line | Claim | Source | Mark |
+| --- | --- | --- | --- |
+| 3 | an agent discovers, carts and buys inside limits set in advance | docs/PRD.md §0, §2 | T |
+| 5 | public specifications only; no employer code | SOURCES.md:3-7 | T |
+| 9 | the hard problem is authorisation; SCA under PSD2, soon PSD3/PSR | docs/PRD.md:13 (echoes the README; external regulation) | U |
+| 11-14 | three pieces; merchant tools over MCP shaped to ACP; buyer agent | merchant/server.ts:91-143, agent/, docs/PRD.md §8 | T |
+| 15 | mandate: signed, scoped, checked on every money-out, human confirm above the cap, audit log | mandate/types.ts, mandate/policy.ts, mandate/audit.ts, docs/ARCHITECTURE.md §4 | T |
+| 17 | rail: a stub in Stage 1, Stripe test mode in Stage 2 | rail/select.ts:20-48 (stub default, ACR_RAIL=stripe), PR #29 | S |
+| 23 | Stage 1 done | TASKS.md Claimed, T01-T10 merged | T |
+| 24 | Stage 2 planned | PRs #29 (T11), #30 (T12a), #32 (T12b), #34 (T12c), #35 (T13) merged | S |
+| 25 | Stage 3 planned (recording, decisions, divergence notes) | recording: T14 not merged; decisions: docs/DECISIONS.md + docs/DECISIONS_INDEX.md; divergences: docs/MANDATE.md §5.2 (AP2), docs/DECISIONS.md D27-D39 (ACP), docs/PRD.md §8 | S (2 of 3 items exist) |
+| 30-31 | npm install, npm test | package.json scripts | T |
+| 32 | demo has two runs | scripts/demo.ts runDemo (one, two, three); output has RUN 1, 2, 3 | S |
+| 35-37 | demo prints order, rail transcript, audit log "twice" | demo output (three runs) | S |
+| 37-38 | the second run trips the threshold; agent stops with a token; principal confirms | demo output run 2; docs/ARCHITECTURE.md §2 scripts/ | T |
+| 38-39 | two invocations print identical text | true for `npx tsx scripts/demo.ts` on this machine (cmp equal, sha1 82b7976c…); npm header lines vary with npm version (TASKS.md:34) | S (wording) |
+| 40 | the two runs inside one invocation differ | three runs now | S |
+| 42 | Node 22+ | package.json engines `>=22.13.0` | S |
+| 42 | no keys needed for Stage 1 | rail/stripe.ts:31-33 (stripe needs sk_test_), test/rail/stripe.live.test.ts:6-8 (skipped without key) | S |
+| 42-43 | lint, build, typecheck are the other three scripts | package.json scripts | T |
+| 49 | PRD: what it is for and is not | docs/PRD.md §2, §6 | T |
+| 50 | ARCHITECTURE: "what Stage 1 does not do" | docs/ARCHITECTURE.md §6 is "Known limits" | S |
+| 51 | SEQUENCE: both paths the demo shows | docs/SEQUENCE.md §1, §2 cover runs 1 and 2 only; demo has three runs | S |
+| 52 | MANDATE: field by field, signing, AP2 mapping | docs/MANDATE.md §1, §2, §5 | T |
+| 53 | "all 116 decisions"; the ten that matter | `grep -c '^## D' docs/DECISIONS.md` = 137; docs/DECISIONS_INDEX.md §3 | S (count) |
+| 54 | DECISIONS: every decision in full | docs/DECISIONS.md | T |
+| 59-61 | merchant, agent, mandate dirs | merchant/server.ts tools, agent/, mandate/ | T |
+| 62 | rail/: stub (Stage 1), Stripe test mode (Stage 2) | rail/stub.ts, rail/stripe.ts, rail/select.ts | S |
+| 63-64 | docs/, test/ | ls | T |
+| 58-65 | layout lists what exists | scripts/ (demo.ts, demo.test.ts, stdio-smoke.test.ts) is missing | S |
+| 69-83 | mandate JSON | mandate/types.ts:23-49, eleven fields, same names | T |
+| 85 | merchant verifies signature, scope, budget before the rail; above threshold pauses; every check and payment outcome audited | docs/ARCHITECTURE.md §4, §5; mandate/policy.ts | T |
+| 89 | not a product | docs/PRD.md §6 | T |
+| 90 | not a conformance claim; divergences in docs/DECISIONS.md | ACP: D27-D39; AP2 divergences are in docs/MANDATE.md §5.2, not DECISIONS.md | S (incomplete) |
+| 91 | not employer-derived; sources in SOURCES.md | SOURCES.md | T |
+| 95 | SOURCES.md has dates | SOURCES.md:3-4 | T |
+| 99 | author line, Substack link | external | U |
+| 101 | MIT licence | LICENSE | T |
+
+T14a inventory result: 36 rows; 19 true, 15 stale, 2 unverifiable (the two U rows are left as they are) 2026-11-02T16:55:53Z
