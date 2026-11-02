@@ -178,3 +178,4 @@ T14a PR #38 opened 2026-11-02T16:59:29Z
 chore three-runs-docs PR #39 opened 2026-11-02T17:52:00Z
 chore three-runs-docs PR #39 round 2: fixes at e373089 (T14b decisions D160 to D169, SEQUENCE three mandates and cart_closed step, PRD §9 revocation 'a later stage'); npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped 2026-11-02T18:05:44Z
 chore three-runs-docs PR #39 round 3: merged origin/main 5e1fa59 (PR #38) at f57aadf; PROGRESS.md conflict resolved by keeping main's lines then this branch's, unchanged; TASKS.md auto-merged (T14a Claimed line only); npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped 2026-11-02T21:35:27Z
+T14b claimed 2026-11-02T21:50:29Z
