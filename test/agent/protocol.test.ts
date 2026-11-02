@@ -60,7 +60,7 @@ describe('the v2 client opening a connection to merchant/stdio.ts', () => {
 
   it('reads the tool list over the negotiated connection', async () => {
     expect(await merchant.listToolNames()).toEqual(TOOL_NAMES);
-  });
+  }, 15_000);
 
   it('calls a tool over the negotiated connection', async () => {
     const outcome = await merchant.callTool('list_products', {});

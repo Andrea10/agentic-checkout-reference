@@ -1,8 +1,8 @@
 /**
- * `npm run demo`: the whole repository, twice, in one terminal.
+ * `npm run demo`: the whole repository, in three runs, in one terminal.
  *
  * This is the first thing a reader sees, so it is written to be read rather
- * than to be impressive. Two runs, one number apart:
+ * than to be impressive. The first two runs are one number apart:
  *
  * - **Run 1** — a mandate whose human-confirm threshold is *above* the
  *   basket. The agent shops, presents the mandate, and the merchant pays.
@@ -15,6 +15,13 @@
  * same planner, the same six steps, the same amount. The only difference is
  * one field of the signed mandate, which is the point the repository is
  * making.
+ *
+ * - **Run 3** — one mandate with run 1's limits, and five attempts to go past
+ *   it: over the per-order cap, over the budget left, at a merchant the
+ *   mandate does not name, a replayed order, and the mandate with a field
+ *   added after it was signed. Each is printed with the code it was refused
+ *   with and the audit lines it left. A closing line reads the ledgers and
+ *   the rail logs and says how much money the five moved.
  *
  * ## Why the merchant runs in this process (D100)
  *
@@ -44,6 +51,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/server';
 import {
   connect,
   describeRefusal,
+  pickIds,
+  placeOrder,
   priceOf,
   runPlan,
   scriptedPlanner,
@@ -51,6 +60,7 @@ import {
   type AgentIdentity,
   type AgentProduct,
   type MerchantConnection,
+  type MerchantRefusal,
   type RunResult,
   type ToolCaller,
   type ToolOutcome,
@@ -59,6 +69,7 @@ import {
   createMandatePolicy,
   exportPublicKey,
   fixedClock,
+  formatEntry,
   generateMandateKeyPair,
   issue,
   type MandateClaims,
@@ -125,6 +136,26 @@ export const RUN_TWO = {
   mandate_id: '22222222-2222-4222-8222-222222222222',
   human_confirm_above_minor: 2000,
 } as const;
+
+/**
+ * Run 3's mandate: run 1's limits under an id of its own, so its audit lines
+ * cannot be read as run 1's. Below its threshold an order is paid in the
+ * same call, so no human step stands between an attempt the policy allowed
+ * and the rail.
+ */
+export const RUN_THREE = {
+  mandate_id: '33333333-3333-4333-8333-333333333333',
+  human_confirm_above_minor: RUN_ONE.human_confirm_above_minor,
+} as const;
+
+/**
+ * A second merchant in run 3, trusting the same issuer. The mandate does not
+ * name it, so presenting the mandate there is the wrong-merchant attempt.
+ */
+export const OTHER_MERCHANT = 'merchant-other';
+
+/** The field run 3's last attempt adds to the signed mandate, and its value. */
+export const ADDED_FIELD = { extra_budget_minor: 5000 } as const;
 
 /** How wide the printed rules are. Narrow enough for any terminal. */
 const WIDTH = 74;
@@ -337,11 +368,16 @@ interface DemoMerchant {
  * `configFromEnvironment` on a synthetic environment, so the demo exercises
  * the same export-to-env-to-import path `merchant/stdio.ts` uses (D60) rather
  * than handing the key object over directly. The policy is then built with a
- * fixed clock, which `policyFor` cannot do.
+ * fixed clock, which `policyFor` cannot do. `merchantId` is
+ * {@link MERCHANT} everywhere but run 3's wrong-merchant attempt.
  */
-function startMerchant(encodedPublicKey: string, railFactory: RailFactory): DemoMerchant {
+function startMerchant(
+  encodedPublicKey: string,
+  railFactory: RailFactory,
+  merchantId: string = MERCHANT,
+): DemoMerchant {
   const config = configFromEnvironment({
-    [MERCHANT_ID_ENV]: MERCHANT,
+    [MERCHANT_ID_ENV]: merchantId,
     [ISSUER_PUBLIC_KEY_ENV]: encodedPublicKey,
   });
   if (config.issuerPublicKey === undefined) {
@@ -589,10 +625,11 @@ export interface RunReport {
   readonly spentMinor: number;
 }
 
-/** Both runs, so a test can read the whole demo without re-parsing the text. */
+/** Every run, so a test can read the whole demo without re-parsing the text. */
 export interface DemoReport {
   readonly one: RunReport;
   readonly two: RunReport;
+  readonly three: AttemptsReport;
 }
 
 /** The audit log's outcomes, in order. */
@@ -793,6 +830,411 @@ async function runTwo(
   };
 }
 
+// --- run 3: attempts to go past the mandate ------------------------------
+
+/** The five attempts, in the order run 3 makes them. */
+export const ATTEMPTS = [
+  'per_order_cap',
+  'remaining_budget',
+  'wrong_merchant',
+  'replay',
+  'field_added',
+] as const;
+
+export type AttemptName = (typeof ATTEMPTS)[number];
+
+/** What one attempt left behind, read off the merchant it was made at. */
+export interface AttemptReport {
+  readonly name: AttemptName;
+  /** The merchant's refusal code, or undefined if the attempt was not refused. */
+  readonly code: string | undefined;
+  /** The failed mandate checks, in check order. Empty but for `mandate_refused`. */
+  readonly reasons: readonly string[];
+  /** The audit lines the attempt added, as `formatEntry` prints them. */
+  readonly auditLines: readonly string[];
+  /** The rail log entries the attempt caused, across both merchants. */
+  readonly railEntries: readonly RailLogEntry[];
+  /** Spent under the mandate, summed over both merchants, before and after. */
+  readonly spentBeforeMinor: number;
+  readonly spentAfterMinor: number;
+}
+
+/** Run 3, for the tests. The rail log is a copy, not a view. */
+export interface AttemptsReport {
+  /** The two orders paid between attempts 1 and 2, which spend most of the budget. */
+  readonly paidOrderIds: readonly string[];
+  readonly attempts: readonly AttemptReport[];
+  /** Spent under the mandate at the end of the run, summed over both merchants. */
+  readonly spentMinor: number;
+  /** Both merchants' rail logs at the end of the run, run 3's merchant first. */
+  readonly railLog: readonly RailLogEntry[];
+}
+
+/** How an attempt ended: refused, or (if the code let it through) not. */
+type AttemptEnd =
+  | { readonly refused: true; readonly refusal: MerchantRefusal }
+  | { readonly refused: false; readonly what: string };
+
+/** What the agent tries, for the printout, and how it is run. */
+interface Attempt {
+  readonly name: AttemptName;
+  readonly heading: string;
+  readonly at: DemoMerchant;
+  /** One or two lines: what is presented, and the limit it meets. */
+  readonly tries: readonly string[];
+  run(): Promise<AttemptEnd>;
+}
+
+/** The agent's run, reduced to how it ended. */
+function endOf(result: RunResult): AttemptEnd {
+  switch (result.outcome.kind) {
+    case 'refused':
+      return { refused: true, refusal: result.outcome.refusal };
+    case 'ordered':
+      return { refused: false, what: `order ${result.outcome.order.order_id} is ${result.outcome.order.status}` };
+    case 'awaiting_confirmation':
+      return { refused: false, what: `order ${result.outcome.held.order_id} held for a human` };
+    case 'stopped':
+      return { refused: false, what: `the agent stopped: ${result.outcome.why}` };
+  }
+}
+
+/** The agent shopping for named products at a merchant, under an identity. */
+async function buy(
+  merchant: DemoMerchant,
+  identity: AgentIdentity,
+  ...productIds: string[]
+): Promise<RunResult> {
+  const connection = await merchant.open();
+  try {
+    return await runPlan({
+      planner: scriptedPlanner({ choose: pickIds(...productIds) }),
+      caller: connection,
+      identity,
+    });
+  } finally {
+    await connection.close();
+  }
+}
+
+/** The catalogue's name for a product id. The demo's own catalogue, not the agent's. */
+function nameOf(productId: string): string {
+  return CATALOGUE.find((product) => product.id === productId)?.name ?? productId;
+}
+
+/** The catalogue's price for some products, one of each. */
+function priceOfAll(...productIds: string[]): number {
+  return productIds.reduce(
+    (sum, id) => sum + (CATALOGUE.find((product) => product.id === id)?.price_minor ?? 0),
+    0,
+  );
+}
+
+/** "A and B": the products of a basket, by name. */
+function names(...productIds: string[]): string {
+  return productIds.map(nameOf).join(' and ');
+}
+
+/** Spent under the mandate, summed over the merchants. */
+function spentUnder(mandate: Mandate, merchants: readonly DemoMerchant[]): number {
+  return merchants.reduce((sum, m) => sum + m.policy.ledger.spent(mandate.mandate_id), 0);
+}
+
+/** The label column of an attempt's lines. */
+const FIELD = 13;
+
+/** One attempt, printed: what was tried, how it was refused, what it left. */
+async function attempt(
+  p: Printer,
+  index: number,
+  spec: Attempt,
+  mandate: Mandate,
+  merchants: readonly DemoMerchant[],
+): Promise<AttemptReport> {
+  // Every merchant is measured, not only the one the attempt was made at, so
+  // money moved anywhere would show.
+  const auditBefore = spec.at.policy.audit.size;
+  const railBefore = merchants.map((m) => m.railLog.length);
+  const spentBefore = spentUnder(mandate, merchants);
+
+  const end = await spec.run();
+
+  const auditLines = spec.at.policy.audit.entries().slice(auditBefore).map(formatEntry);
+  const railEntries = merchants.flatMap((m, i) => m.railLog.slice(railBefore[i]));
+  const railCalls = railEntries.length;
+  const spentAfter = spentUnder(mandate, merchants);
+
+  p.section(`ATTEMPT ${String(index + 1)} OF ${String(ATTEMPTS.length)} — ${spec.heading}`);
+  for (const line of spec.tries) {
+    p.item(line);
+  }
+  if (end.refused) {
+    const reasons = end.refusal.reasons.map((entry) => entry.reason);
+    p.field(
+      'refused',
+      reasons.length === 0 ? end.refusal.code : `${end.refusal.code} [${reasons.join(', ')}]`,
+      FIELD,
+    );
+    // A mandate refusal's own message only repeats the codes; its reasons
+    // carry the sentences.
+    const why =
+      end.refusal.reasons.length === 0
+        ? [end.refusal.message]
+        : end.refusal.reasons.map((entry) => entry.message);
+    for (const message of why) {
+      p.field('why', message, FIELD);
+    }
+  } else {
+    p.field('NOT REFUSED', end.what, FIELD);
+  }
+  if (auditLines.length === 0) {
+    p.field(
+      'audit line',
+      end.refused ? 'none: refused before the mandate check (D65, D127)' : 'none',
+      FIELD,
+    );
+  } else {
+    p.item(count(auditLines.length, 'audit line') + ':');
+    for (const line of auditLines) {
+      p.item(`  ${line}`);
+    }
+  }
+  p.field(
+    'money',
+    `${count(railCalls, 'rail call')}; spent ${spentAfter === spentBefore ? `${money(spentBefore)}, unchanged` : `${money(spentBefore)}, now ${money(spentAfter)}`}`,
+    FIELD,
+  );
+
+  return {
+    name: spec.name,
+    code: end.refused ? end.refusal.code : undefined,
+    reasons: end.refused ? end.refusal.reasons.map((entry) => entry.reason) : [],
+    auditLines,
+    railEntries,
+    spentBeforeMinor: spentBefore,
+    spentAfterMinor: spentAfter,
+  };
+}
+
+/**
+ * Run 3: five attempts to spend past what the mandate allows.
+ *
+ * The agent makes each one through its own code, as in runs 1 and 2: the
+ * planner, the step runner, and `placeOrder`, the one place a mandate is put
+ * on the wire. The replay is `placeOrder` called again with a quote that was
+ * already ordered, which the agent's planner would never do by itself. What
+ * each attempt printed is what the merchant answered, and what it left is
+ * read off the audit log, the rail log and the ledger, never written down.
+ *
+ * The budget attempt needs most of the budget gone, so two orders the mandate
+ * covers are paid between attempts 1 and 2 (D142). The second is the order
+ * the replay resends. Each attempt is measured on its own, from just before
+ * it to just after it, and the closing line sums those measurements.
+ */
+async function runThree(
+  p: Printer,
+  keys: MandateKeyPair,
+  encodedPublicKey: string,
+  railFactory: RailFactory,
+): Promise<AttemptsReport> {
+  const mandate = issue(demoClaims(RUN_THREE), keys.privateKey);
+  const merchant = startMerchant(encodedPublicKey, railFactory);
+  const other = startMerchant(encodedPublicKey, railFactory, OTHER_MERCHANT);
+  const identity: AgentIdentity = { agent: AGENT, mandate };
+  const both = [merchant, other];
+
+  p.run('RUN 3 — five attempts to spend past the mandate');
+  describeMandate(p, mandate);
+  p.item('The same limits as run 1, under a mandate id of its own. In each');
+  p.item('attempt below the agent presents this mandate (in attempt 5, with a');
+  p.item('field added), and each is printed with what the merchant answered');
+  p.item('and what it left behind.');
+
+  const cap = ['prod_gallowbrook_cafetiere'];
+  const pair = ['prod_elderflint_notebook', 'prod_dunlin_merino_socks'];
+  const small = ['prod_elderflint_notebook'];
+
+  const attempts: AttemptReport[] = [];
+
+  attempts.push(
+    await attempt(
+      p,
+      0,
+      {
+        name: 'per_order_cap',
+        heading: 'over the per-order cap',
+        at: merchant,
+        tries: [
+          `tries        ${names(...cap)}, ${money(priceOfAll(...cap))}, in one order`,
+          `the limit    at most ${money(mandate.per_transaction_cap_minor)} in any one order`,
+        ],
+        run: async () => endOf(await buy(merchant, identity, ...cap)),
+      },
+      mandate,
+      both,
+    ),
+  );
+
+  // Most of the budget goes, on two orders the mandate covers.
+  p.section('BETWEEN ATTEMPTS 1 AND 2 — two orders the mandate does cover');
+  const paidOrderIds: string[] = [];
+  let replayQuote: string | undefined;
+  for (let order = 0; order < 2; order += 1) {
+    const result = await buy(merchant, identity, ...pair);
+    if (result.outcome.kind === 'ordered') {
+      paidOrderIds.push(result.outcome.order.order_id);
+      replayQuote = result.memory.quote?.id;
+      const quote = result.memory.quote;
+      p.item(
+        `${result.outcome.order.order_id} — ${result.outcome.order.status}, ${quote === undefined ? 'no quote' : `${money(totalOf(quote))}, quote ${quote.id}`}`,
+      );
+    } else {
+      p.item(`Expected a paid order; the run ended ${result.outcome.kind}.`);
+    }
+  }
+  p.item(`Each one is ${names(...pair)},`);
+  p.item('the basket of runs 1 and 2.');
+  const spent = merchant.policy.ledger.spent(mandate.mandate_id);
+  p.item(
+    `Mandate budget: ${money(spent)} spent of ${money(mandate.amount_cap_minor)}, ${money(mandate.amount_cap_minor - spent)} left`,
+  );
+  p.item('Run 3 means to pay nothing else. Each attempt below is measured on');
+  p.item('its own, from just before it to just after it.');
+
+  const left = mandate.amount_cap_minor - spent;
+
+  attempts.push(
+    await attempt(
+      p,
+      1,
+      {
+        name: 'remaining_budget',
+        heading: 'over the budget left',
+        at: merchant,
+        tries: [
+          `tries        ${names(...pair)},`,
+          `             ${money(priceOfAll(...pair))}, the basket of runs 1 and 2`,
+          `the limit    ${money(left)} left of the ${money(mandate.amount_cap_minor)} in total`,
+        ],
+        run: async () => endOf(await buy(merchant, identity, ...pair)),
+      },
+      mandate,
+      both,
+    ),
+  );
+
+  attempts.push(
+    await attempt(
+      p,
+      2,
+      {
+        name: 'wrong_merchant',
+        heading: 'at a merchant the mandate does not name',
+        at: other,
+        tries: [
+          `tries        ${names(...pair)},`,
+          `             ${money(priceOfAll(...pair))}, at ${OTHER_MERCHANT}`,
+          `the limit    good at ${mandate.merchant} and nowhere else; ${OTHER_MERCHANT}`,
+          '             trusts the same issuer, so the signature holds',
+        ],
+        run: async () => endOf(await buy(other, identity, ...pair)),
+      },
+      mandate,
+      both,
+    ),
+  );
+
+  attempts.push(
+    await attempt(
+      p,
+      3,
+      {
+        name: 'replay',
+        heading: 'a replay of an order already paid',
+        at: merchant,
+        tries: [
+          `tries        place_order again with ${replayQuote ?? 'the last quote'}, which ${paidOrderIds.at(-1) ?? 'an order'} paid`,
+          'the limit    a quote is good for one order (D64, D127)',
+        ],
+        run: async () => {
+          const connection = await merchant.open();
+          try {
+            const outcome = await placeOrder(connection, identity, replayQuote ?? '');
+            switch (outcome.status) {
+              case 'refused':
+                return { refused: true, refusal: outcome.refusal };
+              case 'approved':
+                return { refused: false, what: `order ${outcome.order.order_id} is ${outcome.order.status}` };
+              case 'awaiting_confirmation':
+                return { refused: false, what: `order ${outcome.held.order_id} held for a human` };
+            }
+          } finally {
+            await connection.close();
+          }
+        },
+      },
+      mandate,
+      both,
+    ),
+  );
+
+  // Not typed as a `Mandate`: the extra field is the point, and the agent
+  // puts on the wire whatever object its identity carries.
+  const tampered = { ...mandate, ...ADDED_FIELD };
+  const [field, value] = Object.entries(ADDED_FIELD)[0] ?? ['', 0];
+  attempts.push(
+    await attempt(
+      p,
+      4,
+      {
+        name: 'field_added',
+        heading: 'the mandate with a field added after signing',
+        at: merchant,
+        tries: [
+          `tries        ${names(...small)}, ${money(priceOfAll(...small))}, within the`,
+          `             ${money(left)} left, with "${field}": ${String(value)}`,
+          '             added to the mandate after it was signed',
+          'the limit    every field but the signature is signed (D23)',
+        ],
+        run: async () => endOf(await buy(merchant, { agent: AGENT, mandate: tampered }, ...small)),
+      },
+      mandate,
+      both,
+    ),
+  );
+
+  const refused = attempts.filter((entry) => entry.code !== undefined).length;
+  const during = attempts.flatMap((entry) => entry.railEntries);
+  const captured = during
+    .filter((entry) => entry.call === 'capture' && entry.outcome === 'ok')
+    .reduce((sum, entry) => sum + (entry.amount_minor ?? 0), 0);
+  const ledgerMoved = attempts.reduce(
+    (sum, entry) => sum + entry.spentAfterMinor - entry.spentBeforeMinor,
+    0,
+  );
+
+  p.section('THE INVARIANT — read off both ledgers and both rail logs');
+  p.item(
+    `${count(attempts.length, 'attempt')}, ${String(refused)} refused. Money moved by them: ${money(captured)}.`,
+  );
+  p.item(
+    `Rail calls they caused: ${String(during.length)}. Added to the ledger: ${money(ledgerMoved)}.`,
+  );
+  if (during.length === 0) {
+    p.item('No attempt reached the rail, and the ledger moves only after the');
+    p.item('rail captures (D45), so none of them could move it.');
+  } else {
+    p.item('An attempt reached the rail: see its money line above.');
+  }
+
+  return {
+    paidOrderIds,
+    attempts,
+    spentMinor: spentUnder(mandate, both),
+    railLog: both.flatMap((m) => [...m.railLog]),
+  };
+}
+
 // --- the demo -------------------------------------------------------------
 
 /** How to vary the demo. The tests are the only caller that does. */
@@ -839,6 +1281,7 @@ export async function runDemo(stream: OutputStream, options: DemoOptions = {}): 
 
   const one = await runOne(p, keys, encodedPublicKey, railFactory);
   const two = await runTwo(p, keys, encodedPublicKey, railFactory);
+  const three = await runThree(p, keys, encodedPublicKey, railFactory);
 
   p.line();
   p.rule('=');
@@ -852,7 +1295,7 @@ export async function runDemo(stream: OutputStream, options: DemoOptions = {}): 
   p.field('docs/PRD.md', 'what this is for; DECISIONS.md, why', 28);
   p.line();
 
-  return { one, two };
+  return { one, two, three };
 }
 
 /** True when this file is the process's entry point rather than an import. */
