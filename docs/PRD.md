@@ -89,7 +89,7 @@ Sources and the dates they were read are in `SOURCES.md`.
 ## 9. Open questions and risks
 
 - **Open:** how the human confirmation is delivered in a real product (the repo models a token only). Nonce versus order-id for replay protection is no longer open: D127 settles it (the server-issued quote id and confirmation token are the guard; no nonce is signed into the mandate).
-- **Open:** mandate revocation. The repo relies on expiry: a mandate ends only at `valid_until`. A revoked-id check in the policy step is the likely design; a candidate task for Stage 2. AP2 does not close this either — on the five pages read on 2026-10-28 it defines no verifier-checked revocation mechanism, and instead recommends a short `exp` and puts mandate management on the Shopping Agent (`docs/MANDATE.md` §6).
+- **Open:** mandate revocation. The repo relies on expiry: a mandate ends only at `valid_until`. A revoked-id check in the policy step is the likely design; a candidate task for a later stage. AP2 does not close this either — on the five pages read on 2026-10-28 it defines no verifier-checked revocation mechanism, and instead recommends a short `exp` and puts mandate management on the Shopping Agent (`docs/MANDATE.md` §6).
 - **Risk:** specs move. Mitigation: `SOURCES.md` records dates read, and claims are re-verified before they are cited.
 - **Risk:** the repo is read as a conformance claim. Mitigation: the non-goals and divergence notes say plainly that it is not.
 

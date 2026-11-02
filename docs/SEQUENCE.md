@@ -10,7 +10,7 @@ Five participants, matching the packages:
 
 | In the diagram | Is | Lives in |
 | --- | --- | --- |
-| Principal | the person who signed the mandate | the demo plays this part: it issues both mandates and calls `confirm_order` in run 2 |
+| Principal | the person who signed the mandate | the demo plays this part: it issues three mandates, one per run, and calls `confirm_order` in run 2 |
 | Agent | the buyer agent | `agent/` |
 | Merchant | the MCP server and its tools | `merchant/` |
 | Policy | the mandate check, the spend ledger and the audit log | `mandate/` |
@@ -49,7 +49,7 @@ sequenceDiagram
 
     Agent->>Merchant: place_order with quote_id, agent and mandate
 
-    Note over Merchant: 1 merchant configured, 2 quote current,<br/>3 quote unused, 4 stock still there
+    Note over Merchant: 1 merchant configured, 2 quote current,<br/>3 quote unused, 4 cart not closed by an earlier order<br/>(else cart_closed, D130), 5 stock still there
     Merchant->>Policy: checkMandate with the amount read off the stored quote
     Note over Policy: two gates, then seven checks
     Policy->>Policy: audit record mandate_check allow
@@ -78,8 +78,8 @@ sequenceDiagram
 - The amount the mandate is checked against is read from the merchant's
   *stored* quote, never from the call (D39). The agent is the party the mandate
   exists to bound, so a price it hands back would be an input to distrust.
-- The mandate check is **last** of the five, so the audit log records a
-  decision the merchant actually acted on (D65). The cost is that the four
+- The mandate check is **last** of the six, so the audit log records a
+  decision the merchant actually acted on (D65). The cost is that the five
   checks above it leave no audit entry at all.
 - `approved` is a state, not a body. The order passes through it inside the one
   call and the merchant never sends the word (D88, D80).
