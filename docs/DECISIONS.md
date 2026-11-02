@@ -3217,8 +3217,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   Guards are per server instance (D44, D63): another stdio connection does not
   know the quote, so it refuses with `quote_not_found` instead. A re-quote of the
   same cart is a new quote and not refused here (D64's cost, T12b).
+- *Ruled by Andrea on 30 Oct 2026: the replay audit-line question is option
+  A. D65 and D99 stand, a replay leaves no audit entry, and PRD R10 was
+  reworded to say so (PR #31). The NEEDS-ANDREA wording above is superseded.*
 
-## D128 · Amends D126: the token is spent as its attempt is sent to the rail, not after it throws — PROPOSED (T12b)
+## D128 · Amends D126: the token is spent as its attempt is sent to the rail, not after it throws — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** `settle()` calls `OrderStore.spendToken` for a held order
   immediately before `rail.authorise`, with no `await` between the call and
@@ -3265,7 +3268,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   caller refused while the first attempt is still out is not told how it
   ended, and has to ask again.
 
-## D129 · Amends D85: a rail answer whose amount cannot be acted on is `rail_unavailable`, checked before capture and again after — PROPOSED (T12b; rewritten in T12c for option B, ruled by Andrea)
+## D129 · Amends D85: a rail answer whose amount cannot be acted on is `rail_unavailable`, checked before capture and again after — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** This amends D85, which gives `rail_unavailable` to a rail
   that *throws*: it now also covers a rail that answers with an amount the
@@ -3340,7 +3343,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   amount must also equal the amount the hold reported, so a zero, lower or
   higher capture is `rail_unavailable` with the order left `authorised`.*
 
-## D130 · Amends D64: an order closes its cart — PROPOSED (T12b)
+## D130 · Amends D64: an order closes its cart — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** When `place_order` creates an order, held or direct, it
   closes the cart the quote priced (`CartStore.close`, which records the
@@ -3375,7 +3378,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   and T12c's directories. (T12c added it to the agent's comment listing
   `place_order`'s refusal codes, `agent/order.ts`.)
 
-## D131 · Amends D87 and D129: a capture that is not the amount held is `rail_unavailable`, zero included — PROPOSED (T12c; option B, ruled by Andrea)
+## D131 · Amends D87 and D129: a capture that is not the amount held is `rail_unavailable`, zero included — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** This amends D87, whose ledger records the amount the rail
   took, and D129, whose after-capture check, as T12b shipped it, applied the
@@ -3418,7 +3421,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   PaymentIntent collects"; it is UNVERIFIED (PROGRESS.md), and if it ever
   differs, this check refuses the payment rather than booking it.
 
-## D140 · Run 3 has a mandate of its own, with run 1's limits, at a merchant of its own — PROPOSED (T13)
+## D140 · Run 3 has a mandate of its own, with run 1's limits, at a merchant of its own — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** Run 3 issues one mandate, `RUN_THREE`, for all five
   attempts: the README's caps (5000 in total, 2500 per order, GBP, the same
@@ -3442,7 +3445,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   mandate itself, run 3 needs one paid order fewer and loses the separation
   above.
 
-## D141 · The wrong-merchant attempt is the same mandate presented at a second merchant — PROPOSED (T13)
+## D141 · The wrong-merchant attempt is the same mandate presented at a second merchant — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** Run 3 starts a second merchant whose own id is
   `merchant-other`, configured through `configFromEnvironment` with the same
@@ -3464,7 +3467,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   `merchant-other` would see the whole 5000 cap as unspent. Run 3 does not
   say that, and no attempt depends on it.
 
-## D142 · Two paid orders come between attempts 1 and 2, and each attempt is measured on its own — PROPOSED (T13)
+## D142 · Two paid orders come between attempts 1 and 2, and each attempt is measured on its own — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** Attempt 1 (2750, over the 2500 per-order cap) runs on an
   empty ledger. Two orders of 2045 are then paid at `merchant-demo`, which
@@ -3493,7 +3496,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   another; run concurrently, one attempt's rail calls could land in
   another's window.
 
-## D143 · The replay is `place_order` resent with a paid order's quote, and its audit line prints as none — PROPOSED (T13)
+## D143 · The replay is `place_order` resent with a paid order's quote, and its audit line prints as none — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** Attempt 4 calls the agent's own `placeOrder` again with the
   quote of the second paid order (`quote_000003`, ordered as
@@ -3520,7 +3523,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   (D130). The demo would then print a different code and still move no
   money, and only the replay test notices (mutation M4 in PROGRESS.md).
 
-## D144 · The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers — PROPOSED (T13)
+## D144 · The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** Attempt 5 presents run 3's mandate with one field added
   after signing, `"extra_budget_minor": 5000`, for the notebook at 895
@@ -3543,7 +3546,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   stripped the field would hand the policy a mandate that verifies, and the
   order would be paid.
 
-## D145 · The tool-list test's timeout is 15 s — PROPOSED (T13)
+## D145 · The tool-list test's timeout is 15 s — ACCEPTED (Andrea, 2 Nov)
 
 - **Decision.** "reads the tool list over the negotiated connection" in
   `test/agent/protocol.test.ts` gets a 15000 ms timeout in place of Vitest's

@@ -87,8 +87,8 @@ D09), registering **seven** tools (`merchant/server.ts`):
 | `get_product` | one product | `product_not_found` |
 | `create_cart` | a cart, returning `cart_id` | `invalid_quantity`, `insufficient_stock` |
 | `add_to_cart` | merges a line into a cart | `cart_not_found`, `invalid_quantity`, `insufficient_stock` |
-| `get_quote` | prices a cart as an ACP checkout session | `cart_not_found`, `cart_empty` |
-| `place_order` | the money-out gate | `merchant_misconfigured`, `quote_not_found`, `quote_expired`, `quote_stale`, `quote_already_ordered`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
+| `get_quote` | prices a cart as an ACP checkout session | `cart_not_found`, `cart_closed`, `cart_empty`, `product_not_found` |
+| `place_order` | the money-out gate | `merchant_misconfigured`, `quote_not_found`, `quote_expired`, `quote_stale`, `quote_already_ordered`, `cart_closed`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
 | `confirm_order` | a human's yes, turned into a payment | `merchant_misconfigured`, `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `confirmation_token_spent`, `order_expired`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
 
 Three in-process stores hold the state MCP will not: carts, quotes and orders
@@ -288,7 +288,7 @@ see the known limits below (D65).
 | # | Check | Refusal |
 | --- | --- | --- |
 | 1 | the merchant has a trusted issuer configured | `merchant_misconfigured` |
-| 2 | the token names a held order still awaiting confirmation, and no earlier attempt with it reached the rail and got no answer (D126) | `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `confirmation_token_spent` |
+| 2 | the token names a held order still awaiting confirmation, and no earlier attempt has spent it: a token is spent as its attempt is sent to the rail, before `authorise` answers (D126, D128) | `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `confirmation_token_spent` |
 | 3 | the hold has not lapsed (fifteen minutes) | `order_expired` |
 | 4 | the stock is still there | `insufficient_stock` |
 | 5 | the mandate **still** authorises it | `mandate_refused` |
@@ -358,6 +358,34 @@ amount comes from a stored quote, every quote is issued for a cart with at
 least one line (D37), at a whole quantity of at least one (D19), at an integer
 unit price (D16). A test pins that invariant rather than faking an impossible
 quote (D68).
+
+### The settlement guards (`merchant/pay.ts`, D129, D131)
+
+`settle()` checks the amounts the rail reports twice, through one helper,
+`unreadableAmount`: first the ledger's own rule, through
+`isNonNegativeMinorUnits`, the function the in-memory ledger calls
+(`mandate/ledger.ts`), then a comparison.
+
+1. **The hold, before capture.** After a successful `authorise`, the held
+   amount must pass the ledger's rule and equal the amount asked for, the
+   order's amount that the mandate checked. If not, `capture` is not called,
+   the order keeps the state it had, the ledger is untouched, a held order's
+   token stays spent, the audit line reads `rail_unavailable`,
+   `unreadable answer from authorise`, and the caller gets `rail_unavailable`
+   (D129).
+2. **The capture, after.** After a successful `capture`, the captured amount
+   must pass the same rule and equal the amount the hold reported, zero
+   included. If not, the order stays `authorised`, nothing is written to the
+   ledger, the audit line reads `rail_unavailable`, `unreadable answer from
+   capture`, at the order's amount, and the caller gets `rail_unavailable`
+   (D129, D131).
+
+`StubRail` reports the amount asked for on the hold and the hold's amount on
+the capture (`rail/stub.ts`). `StripeRail` builds the hold from the request
+and reports Stripe's `amount_received` on the capture (`rail/stripe.ts`); that
+it equals the hold is UNVERIFIED, and if it ever differs the second check
+refuses the payment (D131). What each refusal leaves behind is in the known
+limits below.
 
 ## 5. What the audit log holds
 
@@ -513,7 +541,8 @@ have held the mandate (D61, D74).
 
 **A declined card ends the order (D84).** A confirmation token releases one
 payment *attempt*. Once an attempt reaches `settle()` the token will not send
-the order again, so a declined card means the agent must re-quote and the human
+the order again, and the order closed its cart when it was placed (D130), so a
+declined card means the agent must build a new cart, re-quote, and the human
 must be asked a second time. That is deliberate — a retry loop on a held order
 is an agent spending against a decision a person made once — but it is friction
 a real checkout would not accept. D84 names a `retry_order` tool with its own
@@ -531,14 +560,38 @@ A real card authorisation sits for about seven days (D57). Closing this is
 T12's, and a cancel on the rail interface is the Stage 2 addition D51's request
 objects make cheap.
 
-**`markPaid` and `recordSpend` are not atomic.** `settle()` marks the order
-`paid`, writes the settlement line, and only then records the spend
-(`merchant/pay.ts`, D87, D98). The money has moved by then, so the order's own
-record goes first — but a throw out of `recordSpend` leaves a paid order with
-the budget unconsumed and the log already saying `paid`. The ordering picks
-which record to trust rather than removing the window. T12 owns closing it, and
-also owns the test that pins the write order, which is accepted and scheduled
-(D98 — as the file records, swapping log and ledger passes every test today).
+**The settlement guards leave states a person must reconcile (D129, D131).**
+Each consequence is the entry's own, checked against `merchant/pay.ts`.
+
+- *A hold refused before capture* moves no money, but the hold the rail
+  granted is left uncaptured: the `Rail` interface has no void, so nothing
+  releases it (`rail/types.ts`); on `StubRail` it stays `authorised`.
+- *A capture refused after it* is, by the rail's own answer, money that has
+  moved. The order stays `authorised`, the ledger is not written, and the
+  mandate's remaining budget is overstated by the amount taken, so later
+  orders can spend it again, until a person reconciles.
+- *A ledger that throws a plain `Error`* (a database, say) is caught by
+  neither check. `settle()` has already marked the order `paid` and written
+  the `paid` line (D98), nothing is added to the ledger (zero, for a
+  mandate's first order), and the caller sees `internal_error`.
+
+**The guards compare amounts, not currencies.** `unreadableAmount` compares
+`amount_minor` only; the `currency` an `Authorisation` or a `Capture` carries
+(`rail/types.ts`) is not read by `settle()`, whose audit lines take the
+order's currency (`merchant/pay.ts`).
+
+**The captured amount is read again after it is checked.** `settle()` checks
+`captured.capture.amount_minor`, then reads it again for the `paid` line and
+for the ledger (`spendFor`), and `markPaid` stores the capture object
+(`merchant/pay.ts`). A rail object whose `amount_minor` changed between those
+reads would defeat the check.
+
+**D87's case is refused upstream.** D87's ledger records the amount the rail
+took, not the amount the policy checked. With the hold compared with the
+amount asked for and the capture with the hold, a capture that differs from
+the checked amount never reaches the ledger: it is refused as
+`rail_unavailable` and leaves the order `authorised`, as above (D131). D87's
+rule can no longer be told apart from recording the amount checked.
 
 **`StdioServerCommand` has no `env` field (D105).** `agent/connectStdio` takes
 a command and arguments and nothing else (`agent/client.ts`), and the SDK's
@@ -567,10 +620,10 @@ absent rather than zero, so `total` always equals `subtotal` (D36); a single
 hard-coded currency, GBP, with no `Money` type (D16); stock checked and never
 reserved (D17); no `get_order` tool, so an agent that lost its quote cannot
 read the amount back (D62); no way to cancel a hold — it lapses or it is
-confirmed (D82); no release path for a quote whose held order was abandoned
-(D64); and the single-use guard being per quote and not per cart, so a re-quote
-of the same cart can buy the same basket again, bounded only by the mandate's
-caps (D64 — T12 closes this).
+confirmed (D82); and no release path for a quote whose held order was
+abandoned (D64). D64's single-use guard is no longer per quote only: an order
+closes its cart, and another quote of that cart is refused `cart_closed`
+(`merchant/place-order.ts`, `merchant/cart.ts`, D130).
 
 ## 7. Reading order
 

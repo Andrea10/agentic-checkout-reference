@@ -3,11 +3,12 @@
 `docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
-and every status, verbatim. **130 decisions, D01 to D130, with no gaps.**
-127 are ACCEPTED — ruled by Andrea, 25 on 27 October, 84 on 28 October,
-7 on 29 October and 11 on 30 October. 3 are PROPOSED and outstanding: D128 to
-D130, which stay PROPOSED until T12c merges. D110 to D116 are T10's own;
-D117 to D125 are T11's, D126 to D127 are T12a's and D128 to D130 are T12b's.
+and every status, verbatim. **137 decisions, D01 to D131 and D140 to D145.**
+D132 to D139 were allotted to T12c and are unused. All 137 are ACCEPTED —
+ruled by Andrea, 25 on 27 October, 84 on 28 October, 7 on 29 October, 11 on
+30 October and 10 on 2 November. None is PROPOSED. D110 to D116 are T10's own;
+D117 to D125 are T11's, D126 to D127 are T12a's, D128 to D130 are T12b's,
+D131 is T12c's and D140 to D145 are T13's.
 
 Counts, which a reviewer can check against the file with
 `grep -c '^## D' docs/DECISIONS.md`:
@@ -22,8 +23,8 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 28 Oct; the write order is pinned by a test added to T12)` | 1 |
 | `ACCEPTED (Andrea, 29 Oct)` | 7 |
 | `ACCEPTED (Andrea, 30 Oct)` | 11 |
-| `PROPOSED (T12b)` | 3 |
-| **Total** | **130** |
+| `ACCEPTED (Andrea, 2 Nov)` | 10 |
+| **Total** | **137** |
 
 If you have five minutes, read §3 and nothing else.
 
@@ -51,9 +52,15 @@ genuinely needs navigating:
 | D62 | D88 | `approved` left the wire; `place_order` answers `paid` |
 | D63 | D82 | a held order got a fifteen-minute expiry |
 | D106 | D116 | the two demo runs differ in two mandate fields, not one |
+| D126 | D128 | the token is spent as its attempt is sent to the rail, not after `authorise` throws |
+| D85 | D129 | a rail answer whose amount cannot be acted on is also `rail_unavailable`, checked before capture and after |
+| D129 | D131 | after capture, the amount must also equal the hold, zero included |
+| D64 (and D84, by a pointer line) | D130 | an order closes its cart; a declined card leaves its cart closed, so the agent needs a new cart |
+| D87 | D131 | the ledger's amount can no longer differ from the amount checked: a capture that is not the hold is refused |
 
 Ranges, and the task that proposed each, as `docs/DECISIONS.md` itself records
-in the prose above each group:
+in the prose above each group, and from D117 on as the entries and the task
+rows in `TASKS.md` allot them:
 
 | Range | Task | Subject |
 | --- | --- | --- |
@@ -71,13 +78,19 @@ in the prose above each group:
 | D94–D99 | T07c | payment events in the audit log |
 | D100–D109 | T09 | the demo |
 | D110–D116 | T10 | these docs |
+| D117–D125 | T11 | the Stripe test-mode rail |
+| D126–D127 | T12a | replay protection |
+| D128–D130 | T12b | concurrency, settlement and cart closure |
+| D131–D139 | T12c | settlement guards (D131 used) |
+| D140–D149 | T13 | demo run 3 (D140–D145 used) |
 
 The file is ordered by task and not by number, which is why D58 and D59 sit
 before D50, and D90 to D93 before D80. It is append-only: a range was allotted
 while another task was in review.
 
-The amendment table has nine rows, not eight, because review round 1 of this
-task found a ninth: D106's claim about the demo's two mandates. That is a
+The amendment table has fourteen rows. T10 wrote nine, not eight, because
+review round 1 of that task found a ninth: D106's claim about the demo's two
+mandates. The last five are T12b's and T12c's (D128 to D131). That is a
 fifth instance of the class D115 reports — a ruled decision the shipped code
 no longer matches — and the fourth entry in this file to be corrected by
 appending rather than editing.
@@ -213,9 +226,16 @@ appending rather than editing.
 | D125 | A Stripe test-mode demo run is not byte-identical, and still calls its rail a stub | ACCEPTED 30 Oct | Demo | Stripe's ids cannot be made deterministic, so byte-identity (D103) is kept for the default run only. |
 | D126 | A confirmation token is spent when its attempt reaches the rail and gets no answer | ACCEPTED 30 Oct | Payment | An `authorise` that threw has reached the rail and the hold may exist, so the same token must not ask for a second one. |
 | D127 | Replay means a request the merchant already acted on; the quote and the token are the guard | ACCEPTED 30 Oct | Ordering | The server-issued quote id and token are single use and checked before money moves, so no nonce is signed into the mandate. |
-| D128 | Amends D126: the token is spent as its attempt is sent to the rail, not after it throws | PROPOSED (T12b) | Payment | The mark is written in the same synchronous step as the check, before `authorise`, so two confirmations in flight cannot both ask the rail for a hold. |
-| D129 | A capture amount the ledger would refuse leaves the order `authorised` | PROPOSED (T12b) | Payment | The ledger's one refusal is the amount, so it is checked before `markPaid`, and an amount that fails is an unreadable answer (D85), not a payment. |
-| D130 | Amends D64: an order closes its cart | PROPOSED (T12b) | Ordering | A second quote of an unchanged cart could buy the same basket again, so the cart is closed when the order is created, held or direct. |
+| D128 | Amends D126: the token is spent as its attempt is sent to the rail, not after it throws | ACCEPTED 2 Nov | Payment | The mark is written in the same synchronous step as the check, before `authorise`, so two confirmations in flight cannot both ask the rail for a hold. |
+| D129 | Amends D85: a rail answer whose amount cannot be acted on is `rail_unavailable`, checked before capture and again after | ACCEPTED 2 Nov | Payment | A hold the ledger's rule refuses, or that is not the amount asked for, never reaches capture; after capture a failing amount leaves the order `authorised` and the ledger unwritten. |
+| D130 | Amends D64: an order closes its cart | ACCEPTED 2 Nov | Ordering | A second quote of an unchanged cart could buy the same basket again, so the cart is closed when the order is created, held or direct. |
+| D131 | Amends D87 and D129: a capture that is not the amount held is `rail_unavailable`, zero included | ACCEPTED 2 Nov | Payment | The merchant never asks for a partial capture, so a capture of zero, less or more than the hold is refused: the order stays `authorised` and nothing is booked. |
+| D140 | Run 3 has a mandate of its own, with run 1's limits, at a merchant of its own | ACCEPTED 2 Nov | Demo | One mandate for the five attempts, with a 3000 threshold so no attempt waits on a human, and runs 1 and 2 print as before. |
+| D141 | The wrong-merchant attempt is the same mandate presented at a second merchant | ACCEPTED 2 Nov | Demo | A second merchant trusting the same issuer makes `merchant_mismatch` the only reason, under the mandate the other attempts use. |
+| D142 | Two paid orders come between attempts 1 and 2, and each attempt is measured on its own | ACCEPTED 2 Nov | Demo | Two orders of 2045 leave 910 for the budget attempt, and each attempt's window of rail entries and spend must be empty. |
+| D143 | The replay is `place_order` resent with a paid order's quote, and its audit line prints as none | ACCEPTED 2 Nov | Demo | The quote guard refuses it `quote_already_ordered` before the mandate check, so "none" is the true audit line (D65, D99, D127). |
+| D144 | The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers | ACCEPTED 2 Nov | Demo | On a basket the untampered mandate covers, `signature_invalid` is visibly the only thing wrong. |
+| D145 | The tool-list test's timeout is 15 s | ACCEPTED 2 Nov | Testing | 15000 ms is 3x the 5000 ms the test overran under heavy load in T12a; measured runs here all passed at the default. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.
@@ -225,7 +245,7 @@ a test added to T12)`.
 Statuses in the table are shortened — `ACCEPTED (Andrea, 27 Oct)` reads
 `ACCEPTED 27 Oct` — because every ruling in the file is Andrea's. Nothing else
 is abbreviated, and the two qualified statuses are reproduced in full above.
-PROPOSED statuses are not shortened: `PROPOSED (T12b)` reads as the heading
+None is PROPOSED today; a PROPOSED status would be reproduced as the heading
 writes it.
 
 ## 3. Ten decisions that matter
