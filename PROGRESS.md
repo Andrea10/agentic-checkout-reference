@@ -123,3 +123,4 @@ chore post-T13 PR #36 round 2: ARCHITECTURE.md stale passages fixed at b177b18 (
 chore post-T13 PR #36 round 3: pre-review findings fixed at b15ea30 (spent set shared by servers on one merchant state, second concurrent confirm refused in requireConfirmable, amendment rows D84/D85 by D126, sixteen rows); fresh clone: npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped; index 137/137/0; demo sha256 58bdd3f6… on head and main 2026-11-02T16:23:45Z
 chore t14-rows PR #37 opened 2026-11-02T16:48:10Z
 chore three-runs-docs PR #39 opened 2026-11-02T17:52:00Z
+chore three-runs-docs PR #39 round 2: fixes at e373089 (T14b decisions D160 to D169, SEQUENCE three mandates and cart_closed step, PRD §9 revocation 'a later stage'); npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped 2026-11-02T18:05:44Z
