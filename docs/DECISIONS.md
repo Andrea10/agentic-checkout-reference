@@ -3511,8 +3511,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   they say a refusal before the mandate check writes nothing, so "none" is
   the true line.
 - **Cost.** The row asks for each attempt to be printed with its audit line,
-  and the replay has none. This is the same open question as T12a's
-  NEEDS-ANDREA in PROGRESS.md. A second guard sits behind the quote guard:
+  and the replay has none. Andrea ruled T12a's NEEDS-ANDREA on this point
+  on 30 Oct 2026 in the R2 chat session: option A, D65 and D99 stand, a
+  replay leaves no audit entry, and PRD R10 was reworded to say so (chore
+  PR #31). The row's "each with its audit line" does not reflect that
+  ruling for the replay. A second guard sits behind the quote guard:
   with `assertQuoteUnused` removed, the replay is refused `cart_closed`
   (D130). The demo would then print a different code and still move no
   money, and only the replay test notices (mutation M4 in PROGRESS.md).
