@@ -1,6 +1,6 @@
 # SEQUENCE
 
-The two paths `npm run demo` shows, as diagrams. Tool names, status words and
+The three runs `npm run demo` shows: runs 1 and 2 as diagrams, run 3 as a table. Tool names, status words and
 audit outcomes below are the ones the code actually uses — the diagrams were
 drawn against `scripts/demo.ts`, `merchant/place-order.ts`,
 `merchant/confirm-order.ts` and `merchant/pay.ts`, and checked against a real
@@ -10,7 +10,7 @@ Five participants, matching the packages:
 
 | In the diagram | Is | Lives in |
 | --- | --- | --- |
-| Principal | the person who signed the mandate | the demo plays this part: it issues both mandates and calls `confirm_order` in run 2 |
+| Principal | the person who signed the mandate | the demo plays this part: it issues three mandates, one per run, and calls `confirm_order` in run 2 |
 | Agent | the buyer agent | `agent/` |
 | Merchant | the MCP server and its tools | `merchant/` |
 | Policy | the mandate check, the spend ledger and the audit log | `mandate/` |
@@ -49,7 +49,7 @@ sequenceDiagram
 
     Agent->>Merchant: place_order with quote_id, agent and mandate
 
-    Note over Merchant: 1 merchant configured, 2 quote current,<br/>3 quote unused, 4 stock still there
+    Note over Merchant: 1 merchant configured, 2 quote current,<br/>3 quote unused, 4 cart not closed by an earlier order<br/>(else cart_closed, D130), 5 stock still there
     Merchant->>Policy: checkMandate with the amount read off the stored quote
     Note over Policy: two gates, then seven checks
     Policy->>Policy: audit record mandate_check allow
@@ -78,8 +78,8 @@ sequenceDiagram
 - The amount the mandate is checked against is read from the merchant's
   *stored* quote, never from the call (D39). The agent is the party the mandate
   exists to bound, so a price it hands back would be an input to distrust.
-- The mandate check is **last** of the five, so the audit log records a
-  decision the merchant actually acted on (D65). The cost is that the four
+- The mandate check is **last** of the six, so the audit log records a
+  decision the merchant actually acted on (D65). The cost is that the five
   checks above it leave no audit entry at all.
 - `approved` is a state, not a body. The order passes through it inside the one
   call and the merchant never sends the word (D88, D80).
@@ -172,14 +172,34 @@ sequenceDiagram
   is a real widening of what it keeps, and it is listed among the known limits
   in `docs/ARCHITECTURE.md` (D83).
 
-## 3. What the demo does not show
+## 3. Run 3: five attempts to spend past the mandate
 
-Neither run shows a refusal or a failed payment (D106). The policy's third
-answer and the rail's four outcomes are exercised in the tests
-(`test/mandate/policy.test.ts`, `test/merchant/place-order.test.ts`,
-`test/merchant/confirm-order.test.ts`, `test/merchant/settlement-audit.test.ts`)
-rather than in the transcript, and the end-to-end refusal suite is Stage 2's
-T12 (PRD R10).
+Run 3 of the demo. Its mandate has run 1's limits under a mandate id of its
+own, `3333…` (`scripts/demo.ts`, `RUN_THREE`, D140). Between attempts 1 and 2
+the agent pays two orders the mandate does cover, 2045 pence each, so 910 of
+the 5000 are left (D142). Each attempt is then refused:
+
+| # | The attempt | The check that refuses it | Refusal code | Audit line |
+| --- | --- | --- | --- | --- |
+| 1 | one order of 2750 pence, over the per-order cap of 2500 | per-transaction cap, the sixth of the seven checks (`mandate/policy.ts`) | `mandate_refused` [`per_transaction_cap_exceeded`] | `refuse` |
+| 2 | the 2045-pence basket, with 910 pence left | remaining budget, the seventh check (`mandate/policy.ts`) | `mandate_refused` [`budget_exceeded`] | `refuse` |
+| 3 | the same basket at `merchant-other`, which trusts the same issuer (D141) | merchant, the second check (`mandate/policy.ts`) | `mandate_refused` [`merchant_mismatch`] | `refuse` |
+| 4 | `place_order` resent with `quote_000003`, which `order_000002` paid (D143) | quote unused, `orders.assertQuoteUnused` in `merchant/place-order.ts`, before the mandate check | `quote_already_ordered` | none (D65, D127) |
+| 5 | an 895-pence order under the mandate with `extra_budget_minor` added after signing (D144) | gate 2, the signature (`mandate/policy.ts`, D23) | `mandate_refused` [`signature_invalid`] | `refuse` |
+
+No attempt reaches the rail. The run closes on the line
+`5 attempts, 5 refused. Money moved by them: £0.00 (0 pence).`, read off both
+ledgers and both rail logs.
+
+## 4. What the demo does not show
+
+Runs 1 and 2 show no refusal (D106), and no run shows a failed payment. The
+rail's four outcomes, and the policy refusals run 3 does not print, are
+exercised in the tests (`test/mandate/policy.test.ts`,
+`test/merchant/place-order.test.ts`, `test/merchant/confirm-order.test.ts`,
+`test/merchant/settlement-audit.test.ts`) rather than in the transcript. The
+end-to-end refusal suite is T12a's `test/merchant/failure-cases.test.ts`
+(PRD R10).
 
 For reference, the four ways `settle()` can end (`merchant/pay.ts`, D81, D85):
 
