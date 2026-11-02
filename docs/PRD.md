@@ -1,6 +1,6 @@
 # PRD: agentic-checkout-reference
 
-*v0.10, 1 Nov 2026. Author: Andrea Caputo.*
+*v0.11, 2 Nov 2026. Author: Andrea Caputo.*
 
 ## 0. In plain words
 
@@ -74,7 +74,7 @@ Agents are starting to buy things. The cart is a solved problem. The unsolved on
 ## 7. Success criteria
 
 - S1. `npm install && npm test && npm run demo` runs clean from a fresh clone.
-- S2. The demo has two runs: one that completes, and one that trips the human-confirm step and shows the confirmation.
+- S2. The demo has three runs: one that completes, one that trips the human-confirm step and shows the confirmation, and one of five attempts to spend past the mandate, each refused, with no money moved by them.
 - S3. Every refusal in R2, R3, R4 and R10 has a test that fails without the check.
 - S4. Every spec, package and URL cited is verified, or marked UNVERIFIED.
 
