@@ -190,3 +190,4 @@ NEEDS-ANDREA (T14b, not edited, outside the row): docs/DECISIONS.md:3139-3140 (D
 NEEDS-ANDREA (T14b, not edited, outside the row): README.md has no hit for the old title or intro text. Also scripts/demo.test.ts:6 header comment "The two runs reach the two outcomes" and scripts/demo.ts:1285 "ids … so two runs print the same text" (the latter means two invocations, so likely correct) are outside the title/intro lines 2026-11-02T21:53:59Z
 NEEDS-ANDREA (T14b): docs/DECISIONS_INDEX.md has no D160 row; the row allows DECISIONS.md only 2026-11-02T21:53:59Z
 T14b proof: npm ci, lint, build, typecheck exit 0; test 699 passed 1 skipped (main 09e2b8e: 698 passed 1 skipped); fresh clone of task/T14b at 6bb7a16: same, demo sha1 8e1af72d…, stderr empty 2026-11-02T21:53:59Z
+T14b PR #40 opened 2026-11-02T21:54:35Z
