@@ -86,7 +86,7 @@ D09), registering **seven** tools (`merchant/server.ts`):
 | `list_products` | the catalogue as ACP feed products | — |
 | `get_product` | one product | `product_not_found` |
 | `create_cart` | a cart, returning `cart_id` | `invalid_quantity`, `insufficient_stock` |
-| `add_to_cart` | merges a line into a cart | `cart_not_found`, `invalid_quantity`, `insufficient_stock` |
+| `add_to_cart` | merges a line into a cart | `cart_not_found`, `cart_closed`, `invalid_quantity`, `product_not_found`, `insufficient_stock` |
 | `get_quote` | prices a cart as an ACP checkout session | `cart_not_found`, `cart_closed`, `cart_empty`, `product_not_found` |
 | `place_order` | the money-out gate | `merchant_misconfigured`, `quote_not_found`, `quote_expired`, `quote_stale`, `quote_already_ordered`, `cart_closed`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
 | `confirm_order` | a human's yes, turned into a payment | `merchant_misconfigured`, `confirmation_token_unknown`, `order_already_paid`, `order_not_awaiting_confirmation`, `confirmation_token_spent`, `order_expired`, `product_not_found`, `insufficient_stock`, `mandate_refused`, `payment_declined`, `capture_failed`, `rail_unavailable` |
@@ -176,9 +176,11 @@ where SCA under PSD2 lands.
 
 ### `scripts/` — the demo
 
-`npm run demo` runs the whole repository twice and prints both runs
-(`scripts/demo.ts`). The two mandates differ in **two** fields, one of them
-deliberate and one of them the point (`scripts/demo.ts`, `RUN_ONE` and
+`npm run demo` runs the whole repository three times and prints each run
+(`scripts/demo.ts`, `runDemo`). Run 3 makes five attempts to spend past its
+mandate, each refused, under a mandate and merchants of its own (D140 to
+D145). Runs 1 and 2 are a pair: their mandates differ in **two** fields, one
+of them deliberate and one of them the point (`scripts/demo.ts`, `RUN_ONE` and
 `RUN_TWO`):
 
 - `human_confirm_above_minor` — 3000 in run 1, the README's 2000 in run 2,
@@ -274,13 +276,14 @@ the policy, and both end at the rail.
 | 1 | the merchant has a trusted issuer configured | `merchant_misconfigured` | no key, no orders (D60) |
 | 2 | the quote exists, has not expired, is not stale | `quote_not_found`, `quote_expired`, `quote_stale` | the amount comes from the *stored* quote, never from the caller (D38, D39) |
 | 3 | the quote has not already been ordered | `quote_already_ordered` | a quote is a priced promise for one purchase (D64) |
-| 4 | the stock is still there | `insufficient_stock`, `product_not_found` | nothing was reserved when the cart was filled (D17) |
-| 5 | the mandate authorises it | `mandate_refused` | **last**, so the audit log records a decision the merchant acted on (D65) |
-| 6 | pay, or hold | `payment_declined`, `capture_failed`, `rail_unavailable` | `settle()` on the direct path; a hold above the threshold (D88) |
+| 4 | the quote's cart has not already been ordered | `cart_closed` | another quote of the same cart would buy the same basket again; after step 3, so the same quote sent again still reads `quote_already_ordered` (D127, D130) |
+| 5 | the stock is still there | `insufficient_stock`, `product_not_found` | nothing was reserved when the cart was filled (D17) |
+| 6 | the mandate authorises it | `mandate_refused` | **last**, so the audit log records a decision the merchant acted on (D65) |
+| 7 | pay, or hold | `payment_declined`, `capture_failed`, `rail_unavailable` | `settle()` on the direct path; a hold above the threshold (D88) |
 
-Step 5 is last for a reason worth stating plainly: an `allow` entry written for
+Step 6 is last for a reason worth stating plainly: an `allow` entry written for
 an order then refused for want of stock would be a lie told to the one reader
-who matters. The cost is that steps 1 to 4 leave **no audit entry at all** —
+who matters. The cost is that steps 1 to 5 leave **no audit entry at all** —
 see the known limits below (D65).
 
 ### `confirm_order`, in order (`merchant/confirm-order.ts`)
@@ -414,8 +417,12 @@ nothing proves it is the issuer's (`mandate/decision.ts`).
 
 `at`, `mandate_id`, `order_id`, `amount_minor`, `currency`, `outcome` (`paid`,
 `payment_declined`, `capture_failed` or `rail_unavailable`), plus `decline`
-(`{ code, origin }`) on the two decline outcomes and `rail_call` on
-`rail_unavailable`.
+(`{ code, origin }`) on the two decline outcomes, `rail_call` on
+`rail_unavailable`, and `rail_answer: 'unreadable'` on a `rail_unavailable`
+line whose call did answer, with an amount `settle()` would not act on (D129,
+D131). Without `rail_answer` the line means the call never answered; with it,
+the line prints `unreadable answer from` the call (`mandate/audit.ts`,
+`merchant/pay.ts`).
 
 Three things about this entry are deliberate:
 
@@ -548,17 +555,25 @@ is an agent spending against a decision a person made once — but it is frictio
 a real checkout would not accept. D84 names a `retry_order` tool with its own
 rules as the alternative to loosening this.
 
-**Concurrent `confirm_order` calls on one token can grant two authorisations.**
-Nothing is written until `settle()` reaches `markAuthorised`, so two concurrent
-confirmations both pass `requireConfirmable` while the order is still
-`awaiting_confirmation`, and both call `rail.authorise`
-(`merchant/order.ts`, `merchant/pay.ts`). The second `markAuthorised` then
-throws, because `authorised` is not a state it may transition from (D80), and
-the order ends up correct — but the second hold is never released, because
-**the rail interface has no void and no cancel** (`rail/types.ts`, D52, D81).
-A real card authorisation sits for about seven days (D57). Closing this is
-T12's, and a cancel on the rail interface is the Stage 2 addition D51's request
-objects make cheap.
+**Concurrent `confirm_order` calls on one token: one reaches the rail
+(D128).** `settle()` spends a held order's token immediately before
+`rail.authorise`, with no `await` between the check and the mark
+(`merchant/pay.ts`, `OrderStore.spendToken` in `merchant/order.ts`). Of two
+confirmations in flight, the second is refused `confirmation_token_spent`:
+in `requireConfirmable` if the first has already been sent to the rail, or in
+`spendToken` if both passed that check first, in which case its mandate check
+line is already in the log. Either way it never reaches the rail and writes no
+settlement line (D99). `test/merchant/settlement-guards.test.ts` runs two
+`confirm_order` calls through the server against a rail held open, and
+asserts one `authorise`, one `capture`, one payment and one
+`confirmation_token_spent`; `test/merchant/order.test.ts` pins the refusal in
+`spendToken`. The spent set is one process's memory, so two server instances
+do not share it (D44, D63). What remains true: **the rail interface has no
+void and no cancel** (`rail/types.ts`, D52, D81), so a hold is left
+uncaptured when the attempt it belongs to is refused after `authorise`, as a
+hold the settlement guards refuse is (D129). A real card authorisation sits
+for about seven days (D57). A cancel on the rail interface is the Stage 2
+addition D51's request objects make cheap.
 
 **The settlement guards leave states a person must reconcile (D129, D131).**
 Each consequence is the entry's own, checked against `merchant/pay.ts`.
@@ -637,4 +652,4 @@ closes its cart, and another quote of that cart is refused `cart_closed`
 | `agent/order.ts` | the one place a mandate is presented |
 | `docs/MANDATE.md` | the mandate field by field, and the AP2 mapping |
 | `docs/SEQUENCE.md` | both paths as diagrams |
-| `docs/DECISIONS_INDEX.md` | all 116 decisions, and the ten that matter |
+| `docs/DECISIONS_INDEX.md` | all 137 decisions, and the ten that matter |
