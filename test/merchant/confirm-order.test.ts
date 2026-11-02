@@ -30,6 +30,7 @@ import {
   MERCHANT,
   MUG,
   MUG_PRICE,
+  callTool,
   checksOf,
   confirm,
   heldMandate,
@@ -228,8 +229,8 @@ describe('confirm_order: the token is good for one payment (D84)', () => {
       const again = await confirm(declining, confirmation_token);
 
       // The token was spent by the attempt that reached the rail. A declined
-      // payment is not a retry oracle: the order is closed and the agent has
-      // to re-quote (D84).
+      // payment is not a retry oracle: the order is closed, and so is its
+      // cart, so the agent has to build a new cart and quote that (D84, D130).
       expect(refusalOf(again).code).toBe('order_not_awaiting_confirmation');
       expect(refusalOf(again).message).toContain('declined');
     } finally {
@@ -607,11 +608,11 @@ describe('a payment that does not go through (D50, D81, D85)', () => {
     }
   });
 
-  it('declines the direct path the same way, and leaves the quote spent', async () => {
+  it('declines the direct path the same way, and leaves the quote spent and the cart closed', async () => {
     const rail = new ScriptedRail({ authorise: ISSUER_DECLINE });
     const merchant = await openMerchant({ rail });
     try {
-      const { quote_id } = await quoteFor(merchant);
+      const { quote_id, cart_id } = await quoteFor(merchant);
 
       const error = refusalOf(
         await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() }),
@@ -622,10 +623,15 @@ describe('a payment that does not go through (D50, D81, D85)', () => {
       expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(0);
       // The order exists, so the quote is used: a declined payment is not a
       // refused order, and D64's "a refused order creates nothing" does not
-      // reach this far. The agent has to re-quote.
+      // reach this far. The cart was closed when the order was created, before
+      // the rail was called, so a re-quote of it is refused too: the agent has
+      // to build a new cart (D130).
       expect(refusalOf(await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() })).code).toBe(
         'quote_already_ordered',
       );
+      const requote = refusalOf(await callTool(merchant, 'get_quote', { cart_id }));
+      expect(requote.code).toBe('cart_closed');
+      expect(requote.message).toContain('order_000001');
     } finally {
       await merchant.close();
     }

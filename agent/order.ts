@@ -34,7 +34,8 @@
  * - **refused** — the merchant said no, for any reason: every `isError`
  *   answer becomes a refusal (D73). From `place_order` that includes
  *   `mandate_refused`; `quote_not_found`, `quote_expired`, `quote_stale` and
- *   `quote_already_ordered`; `product_not_found` and `insufficient_stock`;
+ *   `quote_already_ordered`; `cart_closed` when another quote of the same cart
+ *   was already ordered (D130); `product_not_found` and `insufficient_stock`;
  *   `payment_declined`, `capture_failed` and `rail_unavailable`;
  *   `merchant_misconfigured` when the merchant has no trusted issuer (D60);
  *   and `internal_error`. A body that is not the merchant's envelope arrives
