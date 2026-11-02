@@ -3336,6 +3336,9 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
     only the audit line and the server's `cause` say which.
   - The check is the in-memory ledger's rule. Another `SpendLedger` with
     other rules is not covered.
+- *Amended by D131: the after-capture check is stricter. The captured
+  amount must also equal the amount the hold reported, so a zero, lower or
+  higher capture is `rail_unavailable` with the order left `authorised`.*
 
 ## D130 · Amends D64: an order closes its cart — PROPOSED (T12b)
 
@@ -3372,9 +3375,13 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   and T12c's directories. (T12c added it to the agent's comment listing
   `place_order`'s refusal codes, `agent/order.ts`.)
 
-## D131 · Amends D87: a capture that is not the amount held is `rail_unavailable`, zero included — PROPOSED (T12c; option B, ruled by Andrea)
+## D131 · Amends D87 and D129: a capture that is not the amount held is `rail_unavailable`, zero included — PROPOSED (T12c; option B, ruled by Andrea)
 
-- **Decision.** After a successful `capture`, `settle()` keeps D129's check
+- **Decision.** This amends D87, whose ledger records the amount the rail
+  took, and D129, whose after-capture check, as T12b shipped it, applied the
+  ledger's rule only. Andrea ruled option B (the capture must equal the
+  hold, zero included) on 2 Nov 2026 in the R2 chat session. After a
+  successful `capture`, `settle()` keeps D129's check
   of the captured `amount_minor` with `isNonNegativeMinorUnits`, and then
   requires it to equal the `amount_minor` the hold reported. A capture of
   zero, of less than the hold or of more fails, and gets D129's existing
