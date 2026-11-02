@@ -255,10 +255,13 @@ export function addToCart(state: MerchantState, args: AddToCartArgs): CartResult
 /**
  * Prices a cart and returns the quote.
  *
- * Refuses `cart_not_found` for an unknown cart and `cart_empty` for an empty
- * one. Calling it twice on an unchanged cart issues two quotes with the same
- * totals and different ids; calling it after the cart changed issues a quote
- * for the new contents and leaves the old one stale (D38).
+ * Refuses `cart_not_found` for an unknown cart, `cart_closed` for one an order
+ * was placed from (D130), and `cart_empty` for an empty one. It also refuses
+ * `product_not_found` for a cart line whose product the quote store's
+ * catalogue does not hold, which `add_to_cart` over the same catalogue does
+ * not produce. Calling it twice on an unchanged cart issues two quotes with
+ * the same totals and different ids; calling it after the cart changed issues
+ * a quote for the new contents and leaves the old one stale (D38).
  */
 export function getQuote(state: MerchantState, args: GetQuoteArgs): GetQuoteResult {
   return { quote: state.quotes.issue(args.cart_id) };

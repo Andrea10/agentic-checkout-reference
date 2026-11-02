@@ -5,8 +5,10 @@
  * 1. Two `confirm_order` calls in flight on one token reach the rail once
  *    (D128). The race is made deterministic with a rail whose `authorise` is
  *    held open until the test releases it.
- * 2. A capture whose amount the ledger would refuse never marks the order
- *    paid (D129).
+ * 2. A hold whose amount the ledger would refuse, or that is not the amount
+ *    asked for, is never captured; a capture whose amount the ledger would
+ *    refuse, or that is not the amount held (zero included), never marks the
+ *    order paid (D129, D131).
  * 3. An order closes its cart, so a second quote of the same cart cannot buy
  *    the same basket again (D130).
  * 4. `settle()` writes the paid line before it records the spend (D98).
@@ -46,6 +48,10 @@ import {
   type Merchant,
 } from './support/merchant-harness.js';
 import { ScriptedRail } from './support/scripted-rail.js';
+import { RailUnavailableError } from '../../merchant/errors.js';
+import { settle } from '../../merchant/pay.js';
+
+import type { OrderFacts } from '../../merchant/order.js';
 
 import { bodyOf, type ToolCallResult } from './support/raw-client.js';
 
@@ -147,9 +153,99 @@ describe('two confirm_order calls in flight on one token (D84, D128)', () => {
   });
 });
 
+describe('a hold whose amount cannot be captured (D52, D129)', () => {
+  const cases = [
+    ['fractional', MUG_PRICE - 0.5],
+    ['negative', -MUG_PRICE],
+    ['zero', 0],
+    ['larger than asked for', MUG_PRICE + 1],
+  ] as const;
+
+  it.each(cases)('refuses a %s hold on the direct path without calling capture', async (_, held) => {
+    const rail = new ScriptedRail({ authoriseAmount: held });
+    const merchant = await openMerchant({ rail });
+    try {
+      const { quote_id } = await quoteFor(merchant);
+
+      const result = await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
+
+      expect(refusalOf(result).code).toBe('rail_unavailable');
+      expect(rail.calls.filter((call) => call === 'capture')).toHaveLength(0);
+      expect(rail.calls).toEqual(['authorise']);
+      // The order keeps the state it had before the rail was called.
+      const stored = merchant.state.orders.get('order_000001');
+      expect(stored?.status).toBe('approved');
+      expect(stored !== undefined && 'authorisation' in stored).toBe(false);
+      expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(0);
+      expect(printed(merchant).slice(1)).toEqual([
+        settlementLine('rail_unavailable', 'unreadable answer from authorise'),
+      ]);
+    } finally {
+      await merchant.close();
+    }
+  });
+
+  it.each(cases)('refuses a %s hold on a confirmed order and leaves its token spent', async (_, held) => {
+    const rail = new ScriptedRail({ authoriseAmount: held });
+    const merchant = await openMerchant({ rail });
+    try {
+      const { confirmation_token } = await holdOrder(merchant);
+      const before = printed(merchant);
+
+      const result = await confirm(merchant, confirmation_token);
+
+      expect(refusalOf(result).code).toBe('rail_unavailable');
+      expect(rail.calls.filter((call) => call === 'capture')).toHaveLength(0);
+      expect(merchant.state.orders.get('order_000001')?.status).toBe('awaiting_confirmation');
+      expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(0);
+      expect(printed(merchant).slice(before.length + 1)).toEqual([
+        settlementLine('rail_unavailable', 'unreadable answer from authorise'),
+      ]);
+      // The attempt reached the rail, so the token stays spent (D126).
+      expect(refusalOf(await confirm(merchant, confirmation_token)).code).toBe(
+        'confirmation_token_spent',
+      );
+      expect(rail.calls).toEqual(['authorise']);
+    } finally {
+      await merchant.close();
+    }
+  });
+
+  it('checks the ledger’s rule first, then the amount asked for', async () => {
+    const reasons: string[] = [];
+    for (const [, held] of cases) {
+      const merchant = await openMerchant({ rail: new ScriptedRail({ authoriseAmount: held }) });
+      try {
+        const approved = merchant.state.orders.approve(factsFor());
+        const thrown = await settle(
+          { rail: merchant.rail, orders: merchant.state.orders, policy: merchant.policy },
+          approved,
+        ).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(thrown).toBeInstanceOf(RailUnavailableError);
+        reasons.push(String((thrown as RailUnavailableError).cause));
+      } finally {
+        await merchant.close();
+      }
+    }
+
+    expect(reasons).toEqual([
+      'TypeError: the rail reported a hold of 1449.5, which is not a whole number of minor units',
+      'TypeError: the rail reported a hold of -1450, which is not a whole number of minor units',
+      'TypeError: the rail reported a hold of 0 where 1450 was asked for',
+      'TypeError: the rail reported a hold of 1451 where 1450 was asked for',
+    ]);
+  });
+});
+
 describe('a capture whose amount the ledger would refuse (D45, D87, D129)', () => {
-  it('leaves the order authorised, the ledger at zero and no paid line', async () => {
-    const rail = new ScriptedRail({ captureAmount: MUG_PRICE - 0.5 });
+  it.each([
+    ['fractional', MUG_PRICE - 0.5],
+    ['negative', -1],
+  ] as const)('leaves the order authorised after a %s capture, the ledger at zero and no paid line', async (_, taken) => {
+    const rail = new ScriptedRail({ captureAmount: taken });
     const merchant = await openMerchant({ rail });
     try {
       const { quote_id } = await quoteFor(merchant);
@@ -166,6 +262,63 @@ describe('a capture whose amount the ledger would refuse (D45, D87, D129)', () =
     } finally {
       await merchant.close();
     }
+  });
+});
+
+describe('a capture that is not the amount held (D52, D131)', () => {
+  const cases = [
+    ['zero', 0],
+    ['lower than the hold', MUG_PRICE - 50],
+    ['higher than the hold', MUG_PRICE + 1],
+  ] as const;
+
+  it.each(cases)('refuses a %s capture, leaves the order authorised and the ledger at zero', async (_, taken) => {
+    const rail = new ScriptedRail({ captureAmount: taken });
+    const merchant = await openMerchant({ rail });
+    try {
+      const { quote_id } = await quoteFor(merchant);
+
+      const result = await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
+
+      expect(refusalOf(result).code).toBe('rail_unavailable');
+      expect(rail.calls).toEqual(['authorise', 'capture']);
+      expect(merchant.state.orders.get('order_000001')?.status).toBe('authorised');
+      expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(0);
+      expect(printed(merchant).slice(1)).toEqual([
+        settlementLine('rail_unavailable', 'unreadable answer from capture'),
+      ]);
+    } finally {
+      await merchant.close();
+    }
+  });
+
+  it('checks the ledger’s rule first, then the amount held', async () => {
+    const reasons: string[] = [];
+    for (const taken of [MUG_PRICE - 0.5, -1, 0, MUG_PRICE - 50, MUG_PRICE + 1]) {
+      const merchant = await openMerchant({ rail: new ScriptedRail({ captureAmount: taken }) });
+      try {
+        const approved = merchant.state.orders.approve(factsFor());
+        const thrown = await settle(
+          { rail: merchant.rail, orders: merchant.state.orders, policy: merchant.policy },
+          approved,
+        ).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(thrown).toBeInstanceOf(RailUnavailableError);
+        reasons.push(String((thrown as RailUnavailableError).cause));
+      } finally {
+        await merchant.close();
+      }
+    }
+
+    expect(reasons).toEqual([
+      'TypeError: the rail reported a capture of 1449.5, which is not a whole number of minor units',
+      'TypeError: the rail reported a capture of -1, which is not a whole number of minor units',
+      'TypeError: the rail reported a capture of 0 where 1450 was held',
+      'TypeError: the rail reported a capture of 1400 where 1450 was held',
+      'TypeError: the rail reported a capture of 1451 where 1450 was held',
+    ]);
   });
 });
 
@@ -293,6 +446,29 @@ describe('a spent token is refused before the hold expiry is read (D126)', () =>
     }
   });
 });
+
+/** The facts of a one-mug order, as `place_order` would build them. */
+function factsFor(): OrderFacts {
+  return {
+    quote_id: 'quote_000001',
+    cart_id: 'cart_000001',
+    cart_version: 2,
+    items: [
+      {
+        product_id: MUG,
+        name: 'mug',
+        quantity: 1,
+        unit_price_minor: MUG_PRICE,
+        line_total_minor: MUG_PRICE,
+      },
+    ],
+    amount_minor: MUG_PRICE,
+    currency: 'GBP',
+    agent: AGENT,
+    merchant: 'merchant-demo',
+    mandate_id: MANDATE_ID,
+  };
+}
 
 /** Quotes an existing cart and returns the quote id, or `undefined` on a refusal. */
 async function quoteIdFor(merchant: Merchant, cartId: string): Promise<string | undefined> {

@@ -79,3 +79,12 @@ T12b demo check: npm run demo twice on a fresh clone of main and twice on a fres
 T12b fresh clone of task/T12b at 4e28f22: npm ci, lint, build, typecheck, test (676 passed, 1 skipped) all exit 0 2026-10-31T01:33:01Z
 T12b PR #32 opened 2026-10-31T01:33:55Z
 chore t12c-row PR #33 opened 2026-11-01T00:03:43Z
+T12c claimed 2026-11-01T11:39:50Z
+T12c failing first: on origin/main with the new tests copied in, 9 of the new tests fail (the 4 direct-path and 4 held-path hold cases are paid instead of refused; the settle() cause test gets no throw); the cart-closed-on-decline, negative-capture and zero-capture tests pass on main and are pinned by mutation instead 2026-11-01T11:51:26Z
+T12c mutations: 11 applied and restored, each failed at least one new test (list in the PR) 2026-11-01T11:51:26Z
+T12c audit lines: main's 676 tests, with AuditLog.print instrumented, print 151 lines (58 settlement lines) against main's code and against this branch's code, sorted byte-identical 2026-11-01T11:51:26Z
+T12c agent/order.ts comment commit 876d647: tsc -p tsconfig.build.json --removeComments --sourceMap false --declarationMap false, output of the parent and of the commit diff -r identical, 98 files (with source maps on, only agent/order.js.map differs, by line offsets) 2026-11-01T11:51:26Z
+T12c PR #34 opened 2026-11-01T11:54:07Z
+T12c UNVERIFIED: that a full Stripe capture always reports amount_received equal to the held amount. Stripe's capture reference says amount_to_capture "Defaults to the full `amount_capturable` if it's not provided" (StripeRail sends none), and the PaymentIntent object reference describes amount_received only as "Amount that this PaymentIntent collects"; neither says the two are equal. Not asserted; D131 refuses a capture that differs 2026-11-02
+T12c D131 option B pushed at head cb97b55: fresh clone npm ci, lint, build, typecheck, test (690 passed, 1 skipped) exit 0; demo twice on main and twice on branch sha256 308761f0a2cc2e66… stderr empty; main's tests print 151 audit lines on main and branch code, sorted identical; main's 3 D87 partial-capture tests fail on branch code, as ruled; mutation E1 (equality removed) fails all 7 new or changed tests, restored 2026-11-02
+T12c fix round 2 at bb8acac: D131 heading and text say it amends D87 and D129 and record Andrea's option B ruling (2 Nov 2026, R2 chat session); pointer line under D129; docs/DECISIONS.md only; npm ci, lint, build, typecheck, test (690 passed, 1 skipped) exit 0 2026-11-02T10:17:17Z
