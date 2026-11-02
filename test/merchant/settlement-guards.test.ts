@@ -7,8 +7,8 @@
  *    held open until the test releases it.
  * 2. A hold whose amount the ledger would refuse, or that is not the amount
  *    asked for, is never captured; a capture whose amount the ledger would
- *    refuse never marks the order paid (D129). A zero capture is not refused
- *    by that rule, and is pinned as it is (D131).
+ *    refuse, or that is not the amount held (zero included), never marks the
+ *    order paid (D129, D131).
  * 3. An order closes its cart, so a second quote of the same cart cannot buy
  *    the same basket again (D130).
  * 4. `settle()` writes the paid line before it records the spend (D98).
@@ -265,25 +265,60 @@ describe('a capture whose amount the ledger would refuse (D45, D87, D129)', () =
   });
 });
 
-describe('a zero capture, which the ledger’s rule admits (D87, D131)', () => {
-  it('marks the order paid and records nothing spent', async () => {
-    const rail = new ScriptedRail({ captureAmount: 0 });
+describe('a capture that is not the amount held (D52, D131)', () => {
+  const cases = [
+    ['zero', 0],
+    ['lower than the hold', MUG_PRICE - 50],
+    ['higher than the hold', MUG_PRICE + 1],
+  ] as const;
+
+  it.each(cases)('refuses a %s capture, leaves the order authorised and the ledger at zero', async (_, taken) => {
+    const rail = new ScriptedRail({ captureAmount: taken });
     const merchant = await openMerchant({ rail });
     try {
       const { quote_id } = await quoteFor(merchant);
 
       const result = await order(merchant, { quote_id, agent: AGENT, mandate: mandateFor() });
 
-      expect(successOf(result).status).toBe('paid');
+      expect(refusalOf(result).code).toBe('rail_unavailable');
       expect(rail.calls).toEqual(['authorise', 'capture']);
-      expect(merchant.state.orders.get('order_000001')?.status).toBe('paid');
+      expect(merchant.state.orders.get('order_000001')?.status).toBe('authorised');
       expect(merchant.policy.ledger.spent(MANDATE_ID)).toBe(0);
       expect(printed(merchant).slice(1)).toEqual([
-        settlementLine('paid', '-').replace(`${String(MUG_PRICE)} GBP`, '0 GBP'),
+        settlementLine('rail_unavailable', 'unreadable answer from capture'),
       ]);
     } finally {
       await merchant.close();
     }
+  });
+
+  it('checks the ledger’s rule first, then the amount held', async () => {
+    const reasons: string[] = [];
+    for (const taken of [MUG_PRICE - 0.5, -1, 0, MUG_PRICE - 50, MUG_PRICE + 1]) {
+      const merchant = await openMerchant({ rail: new ScriptedRail({ captureAmount: taken }) });
+      try {
+        const approved = merchant.state.orders.approve(factsFor());
+        const thrown = await settle(
+          { rail: merchant.rail, orders: merchant.state.orders, policy: merchant.policy },
+          approved,
+        ).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(thrown).toBeInstanceOf(RailUnavailableError);
+        reasons.push(String((thrown as RailUnavailableError).cause));
+      } finally {
+        await merchant.close();
+      }
+    }
+
+    expect(reasons).toEqual([
+      'TypeError: the rail reported a capture of 1449.5, which is not a whole number of minor units',
+      'TypeError: the rail reported a capture of -1, which is not a whole number of minor units',
+      'TypeError: the rail reported a capture of 0 where 1450 was held',
+      'TypeError: the rail reported a capture of 1400 where 1450 was held',
+      'TypeError: the rail reported a capture of 1451 where 1450 was held',
+    ]);
   });
 });
 

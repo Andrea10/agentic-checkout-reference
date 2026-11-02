@@ -2099,6 +2099,9 @@ bank (D55).
   throw out of `recordSpend` would leave a paid order with budget unconsumed,
   and the reverse would leave a consumed budget on an order that does not read
   `paid`. The money has moved by then, so the order's own record goes first.
+- *Amended by D131: a capture that is not the amount the hold reported is
+  `rail_unavailable` and is not recorded, so a recorded capture is always
+  the amount held.*
 
 ## D88 · `place_order` pays on the direct path, and `approved` leaves the wire — ACCEPTED (Andrea, 28 Oct)
 
@@ -3279,11 +3282,10 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
      `rail_unavailable`. The reason, with the reported amount, is kept on the
      error's `cause`.
   2. **After capture, the second line.** A successful `capture` whose
-     `amount_minor` fails the same `isNonNegativeMinorUnits` leaves the order
+     `amount_minor` fails the same `isNonNegativeMinorUnits`, or is not the
+     amount the hold reported (D131: zero, lower or higher), leaves the order
      `authorised`, writes nothing to the ledger, and gets the audit detail
-     `unreadable answer from capture` and the code `rail_unavailable`. The
-     captured amount is not compared with the hold: D87 records what the rail
-     took, which may be less.
+     `unreadable answer from capture` and the code `rail_unavailable`.
   The settlement entry carries one optional field, `rail_answer:
   'unreadable'`, set on those two lines only. Every other line prints as
   before.
@@ -3313,7 +3315,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   `rail_unavailable` is the code D85 gives a payment whose state is unknown,
   and the detail column says the rail did answer, so the line does not claim
   a timeout. The after-capture check stays because a rail can hold a good
-  amount and report taking a bad one.
+  amount and report taking a bad one, or another one (D131).
 - **Cost.** Each consequence below was checked against `merchant/pay.ts`.
   - *Before capture:* no money has moved, but the hold the rail granted is
     left uncaptured. The `Rail` interface has no void, so nothing releases
@@ -3370,26 +3372,41 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   and T12c's directories. (T12c added it to the agent's comment listing
   `place_order`'s refusal codes, `agent/order.ts`.)
 
-## D131 · A zero capture passes the after-capture check and marks the order paid — PROPOSED (T12c)
+## D131 · Amends D87: a capture that is not the amount held is `rail_unavailable`, zero included — PROPOSED (T12c; option B, ruled by Andrea)
 
-- **Decision.** The after-capture check of D129 stays the ledger's rule,
-  `isNonNegativeMinorUnits`, which admits zero. A `capture` that reports
-  `amount_minor: 0` therefore marks the order `paid`, records a spend of 0,
-  and prints a `paid` line of `0 GBP`. T12c pins that with a test in
-  `test/merchant/settlement-guards.test.ts`, so a change to it is visible. A
-  zero *hold* is refused before capture by D129's comparison.
-- **Alternative.** Check the capture with `isPositiveMinorUnits` (D58), so a
-  zero capture is `rail_unavailable`, `unreadable answer from capture`, like a
-  negative one. Or compare the capture with the hold, which also refuses
-  zero, but refuses every partial capture too, and D87 records what the rail
-  took, which may be less.
-- **Why.** The T12c brief asks for the after-capture check to stay as it is,
-  as the second line of defence, and for the rule to be the ledger's own. The
-  ledger accepts a zero spend, and D87 accepts a capture of less than the
-  hold, of which zero is the limit. Refusing it would be a behaviour change
-  nobody has ruled.
-- **Cost.** An order can read `paid` when, by the rail's own answer, nothing
-  was taken. `StubRail` captures in full (D52), so it cannot produce this;
-  `StripeRail` reports Stripe's `amount_received`, which nothing in this repo
-  has seen at zero, and the test reaches the case only through
-  `ScriptedRail`. **This is the entry I would most like ruled.**
+- **Decision.** After a successful `capture`, `settle()` keeps D129's check
+  of the captured `amount_minor` with `isNonNegativeMinorUnits`, and then
+  requires it to equal the `amount_minor` the hold reported. A capture of
+  zero, of less than the hold or of more fails, and gets D129's existing
+  post-capture refusal: the order stays `authorised`, nothing is written to
+  the ledger, the audit line reads `rail_unavailable`, `unreadable answer
+  from capture`, at the order's amount (D97), and the caller gets
+  `rail_unavailable`, with the reason on the error's `cause`. It is the same
+  code path as D129's, through one helper in `merchant/pay.ts` that checks a
+  hold against the amount asked for and a capture against the amount held.
+  The `Rail` interface is unchanged.
+- **Alternative.** The first version of this entry: the ledger's rule only
+  after capture, so a zero capture marks the order `paid`, records a spend
+  of 0 and prints `paid … 0 GBP`, and a partial capture is booked at the
+  amount taken, as D87's tests had pinned it. Or refuse zero only
+  (`isPositiveMinorUnits`, D58) and keep partial captures.
+- **Why.** The merchant never asks for a partial capture: `CaptureRequest`
+  carries only the authorisation id (D52), and both rails capture the whole
+  hold (`StubRail` by construction; `StripeRail` sends no
+  `amount_to_capture`, which Stripe's capture reference says defaults to the
+  full `amount_capturable`). An answer reporting another amount therefore
+  disagrees with the request it answers, and booking it would write a `paid`
+  order and a budget from a figure the merchant cannot account for. Zero is
+  the plainest case: an order would read `paid` for nothing taken.
+- **Cost.** D87's rule, that the ledger records the amount the rail took, can
+  no longer be told apart from recording the amount checked: both now
+  equal the hold, or the payment is refused. The three tests in
+  `test/merchant/place-order.test.ts` that pinned a 1400 capture of a 1450
+  hold as `paid` now pin it as refused, so their audit lines differ from
+  main's. A rail that really did take a partial amount leaves an order
+  `authorised` with money moved and the budget overstated until a person
+  reconciles, as D129's after-capture case does. That Stripe's
+  `amount_received` equals the held amount on a full capture is not stated
+  in Stripe's reference, which describes the field only as "Amount that this
+  PaymentIntent collects"; it is UNVERIFIED (PROGRESS.md), and if it ever
+  differs, this check refuses the payment rather than booking it.

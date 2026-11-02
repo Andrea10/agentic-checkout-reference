@@ -36,13 +36,13 @@ export interface RailScript {
   /** Decline or throw on `capture`. Omit to let it succeed. */
   readonly capture?: RailFailure;
   /**
-   * Capture *less* than was authorised.
+   * Report a capture of this amount instead of the amount held.
    *
-   * `StubRail` captures in full and always will (D52), so a rail that takes
-   * 1400 of a 1450 hold is the one thing nothing else in the repo can
-   * produce — and it is the case D87 turns on: the ledger has to record what
-   * the rail took, not what the policy checked. Omit it and the capture is in
-   * full, as everywhere else.
+   * `StubRail` captures in full and always will (D52), so a rail that reports
+   * taking 1400 of a 1450 hold, or nothing, or more, is something nothing else
+   * in the repo can produce. Since D131 the merchant refuses each of them as
+   * an unreadable answer from `capture`. Omit it and the capture is in full,
+   * as everywhere else.
    */
   readonly captureAmount?: number;
   /**
