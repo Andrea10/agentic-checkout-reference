@@ -334,10 +334,12 @@ export class OrderStore {
    * moves (D128). So three kinds of attempt leave a spent token on an order
    * that still reads `awaiting_confirmation`: one whose `authorise` threw (D85,
    * D126), one whose `authorise` answered with a hold `settle()` would not
-   * capture (D129), and one whose `authorise` has not answered yet. A
-   * confirmation that passes this check can still be refused by
-   * {@link spendToken}, if another confirmation of the same token was sent to
-   * the rail after this check ran.
+   * capture (D129), and one whose `authorise` has not answered yet. Through
+   * `confirm_order` this check is the one that refuses a second confirmation:
+   * nothing awaits between it and `settle()`, and `settle()` spends the token
+   * before its first `await`. The refusal in {@link spendToken} is reached
+   * only by calling `spendToken`, or `settle()`, directly on a token already
+   * spent.
    *
    * @throws MerchantError `confirmation_token_unknown`, `order_already_paid`,
    * `order_not_awaiting_confirmation`, `confirmation_token_spent` or
