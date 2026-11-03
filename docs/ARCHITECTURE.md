@@ -49,8 +49,8 @@ every dependency is an argument.
 mandate/     issue, sign, verify; the policy check; the spend ledger; the audit log
 merchant/    MCP server: catalogue, cart, quote, place_order, confirm_order
 agent/       buyer agent: MCP client, planner, runner
-rail/        payment interface; StubRail for Stage 1
-scripts/     npm run demo — the whole thing twice, in one terminal
+rail/        payment interface; StubRail (the default), StripeRail in test mode (ACR_RAIL=stripe)
+scripts/     npm run demo — the whole thing in three runs, in one terminal
 ```
 
 ### `mandate/` — the authority

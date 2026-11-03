@@ -67,7 +67,7 @@ the other three scripts.
 | --- | --- |
 | [docs/PRD.md](docs/PRD.md) | what this is for, and what it is not |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the pieces, the order states, where each check runs, and **its known limits** |
-| [docs/SEQUENCE.md](docs/SEQUENCE.md) | the paths of demo runs 1 and 2, as diagrams |
+| [docs/SEQUENCE.md](docs/SEQUENCE.md) | the paths of the three demo runs: runs 1 and 2 as diagrams, run 3 as a table |
 | [docs/MANDATE.md](docs/MANDATE.md) | the mandate field by field, how it is signed, and the field-by-field mapping to AP2 |
 | [docs/DECISIONS_INDEX.md](docs/DECISIONS_INDEX.md) | every decision in one table, and the ten that matter |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | every decision in full: what, the alternative, why, and what it cost |
