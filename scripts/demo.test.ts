@@ -3,7 +3,7 @@
  *
  * Five things are checked, in the order they matter:
  *
- * 1. **The two runs reach the two outcomes.** Run 1 is paid in one call; run
+ * 1. **Runs 1 and 2 reach their two outcomes.** Run 1 is paid in one call; run
  *    2 is held for a human and then paid when the token comes back. That is
  *    the PRD's S2, and it is the only thing a reader of the demo is being
  *    promised.
