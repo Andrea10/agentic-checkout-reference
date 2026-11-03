@@ -294,7 +294,7 @@ the concept has no field in AP2 as read.
 | `valid_from` | — for the mandate's own validity (`iat` is issuance, which is not the same claim). The nearest named field is `not_before` ("Earliest valid execution date") on the `payment.execution_date` constraint, which bounds *when the payment may execute*, not when the authority opens | **Divergence.** Ours states an explicit instant before which the authority is not usable, and refuses `mandate_not_yet_valid` against it. AP2 has no such claim on either mandate: a mandate is usable from issuance until `exp`. `execution_date.not_before` is a different question asked about the payment. |
 | `valid_until` | `exp` | **Match.** The nearest thing to a clean one. AP2's is an integer Unix epoch and ours an ISO 8601 string. AP2 additionally recommends setting `exp` on open mandates "to the smallest value that will allow the Shopping Agent to complete the assigned task" — advice this repo does not follow, since a demo mandate runs for a day. |
 | `human_confirm_above_minor` | — | **Divergence, and ours is the addition.** AP2 draws the human line structurally — Direct mode versus Autonomous mode, with the Trusted Surface rendering the mandate to the User — rather than with a per-amount threshold inside the credential. A number above which software must stop and ask is this repository's own idea, and it is the one the demo is built to show. |
-| `signature` | the SD-JWT itself: a JWS with selective-disclosure salted claim digests | **Divergence, ruled.** Ours is a raw Ed25519 signature over canonical JSON carried in the object's own `signature` member (D22, D23, D24). No selective disclosure, no JWT header to negotiate algorithms with, and **no interoperability with an AP2 verifier** — if Stage 2 needs one, the signing format changes, not just the encoding. |
+| `signature` | the SD-JWT itself: a JWS with selective-disclosure salted claim digests | **Divergence, ruled.** Ours is a raw Ed25519 signature over canonical JSON carried in the object's own `signature` member (D22, D23, D24). No selective disclosure, no JWT header to negotiate algorithms with, and **no interoperability with an AP2 verifier** — Stage 2 did not add one, and if a later stage needs one, the signing format changes, not just the encoding. |
 
 AP2 fields with no counterpart here at all, because there is no Payment
 Mandate: `payment_instrument` (`{id, type, description?}`), `pisp`,
@@ -381,7 +381,7 @@ left without asking, and no second party can check the merchant's arithmetic.
 
 This repository has none, by design: a mandate ends only at `valid_until`
 (PRD §6, `mandate/policy.ts`). A revoked-id check in the policy step is the
-likely design and a candidate for Stage 2.
+likely design and a candidate for a later stage; Stage 2 did not add one.
 
 That gap is not one AP2 closes either. On the pages read on 2026-10-28 —
 specification, checkout_mandate, payment_mandate, agent_authorization,
