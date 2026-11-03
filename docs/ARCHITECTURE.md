@@ -1,6 +1,6 @@
 # ARCHITECTURE
 
-How the pieces fit, what each one checks, and what Stage 1 does not do.
+How the pieces fit, what each one checks, and what the repository does not do.
 
 Every statement below is tied to the file that implements it or the decision
 that ruled it, in brackets. Where the two disagree, the file wins and the
@@ -15,7 +15,7 @@ before it takes money that no human clicked for:
 
 > This software says it may spend £20.45 of someone's money here. Says who?
 
-Stage 1 answers it with a **mandate**: a flat object naming the principal, the
+The repository answers it with a **mandate**: a flat object naming the principal, the
 agent, the one merchant, the currency, a total cap, a per-transaction cap, a
 validity window and a threshold above which a human must be asked, signed
 Ed25519 over a canonical serialisation of its own fields (`mandate/types.ts`,
@@ -171,7 +171,8 @@ silent by default — its log is an injected callback defaulting to
 
 Eight decline codes are declared now, including three the stub never
 produces — `card_declined`, `insufficient_funds`, `authentication_required` —
-so that Stage 2's Stripe rail widens nothing (D53). The third of those is
+so that the Stripe test-mode rail Stage 2 added widens nothing (D53,
+`rail/stripe.ts`). The third of those is
 where SCA under PSD2 lands.
 
 ### `scripts/` — the demo
@@ -491,7 +492,7 @@ is the payment those two checks authorised between them
 
 ## 6. Known limits
 
-Stage 1 is a reference implementation, not a product. Every gap below is
+This repository is a reference implementation, not a product. Every gap below is
 deliberate, ruled, and named here rather than left for a reader to find.
 
 **The agent id is not authenticated (D61).** This is the weakest link in the
@@ -522,8 +523,8 @@ called after the rail succeeds, because budget consumed by a payment that then
 failed is budget the user never gets back (`mandate/policy.ts`,
 `merchant/pay.ts`). Between the two, nothing holds the budget: two concurrent
 orders under one mandate can both pass a check and both be recorded, together
-exceeding the cap. Stage 1 is single-threaded and the demo is sequential, so it
-cannot happen here, but it is a real gap. Closing it needs either a reservation
+exceeding the cap. The demo runs its orders one after another, so it cannot
+happen there, but it is a real gap. Closing it needs either a reservation
 with an expiry and a sweeper, or a ledger that checks and records in one
 transaction.
 
@@ -566,8 +567,9 @@ confirmations in flight through the server, the second is refused
 `await` (`merchant/pay.ts`), so the first call runs to the rail before the
 second starts. The second is refused before the mandate check, so it writes no
 mandate check line, never reaches the rail, and writes no settlement line
-(D99). The refusal in `spendToken` is a second guard that only a direct
-`OrderStore` call reaches. `test/merchant/settlement-guards.test.ts` runs two
+(D99). The refusal in `spendToken` is a second guard that only a direct call
+reaches: `OrderStore.spendToken`, or `settle()`, called on a token already
+spent (`merchant/order.ts`). `test/merchant/settlement-guards.test.ts` runs two
 `confirm_order` calls through the server against a rail held open, and
 asserts one `authorise`, one `capture`, one payment, one
 `confirmation_token_spent` and one settlement line;
@@ -579,8 +581,9 @@ across processes or machines (D44, D63). What remains true: **the rail interface
 void and no cancel** (`rail/types.ts`, D52, D81), so a hold is left
 uncaptured when the attempt it belongs to is refused after `authorise`, as a
 hold the settlement guards refuse is (D129). A real card authorisation sits
-for about seven days (D57). A cancel on the rail interface is the Stage 2
-addition D51's request objects make cheap.
+for about seven days (D57). Stage 2 did not add a cancel to the rail
+interface; it is a candidate for a later stage, and D51's request objects make
+it cheap.
 
 **The settlement guards leave states a person must reconcile (D129, D131).**
 Each consequence is the entry's own, checked against `merchant/pay.ts`.
@@ -625,15 +628,15 @@ So `scripts/stdio-smoke.test.ts` constructs its own `StdioClientTransport` with
 `agent/connect`. The consequence: `connectStdio` — the one helper a reader
 would reach for — is exercised only against a merchant with no issuer
 configured, so the helper cannot actually buy anything as it stands. Giving
-`StdioServerCommand` an optional `env` is a small, obvious change and a
-candidate for Stage 2.
+`StdioServerCommand` an optional `env` is a small, obvious change; Stage 2 did
+not make it, and it is a candidate for a later stage.
 
 **Mandate revocation is a non-goal.** A mandate ends only at `valid_until`
 (PRD §6). There is no revoked-id list, no status endpoint and no way to cancel
 a mandate the principal has changed their mind about: the policy reads the
 signed claims and the ledger, and nothing else (`mandate/policy.ts`). A
 revoked-id check in the policy step is the likely design and a candidate task
-for Stage 2. Nor is this a gap only on our side — AP2 as read on 2026-10-28
+for a later stage; Stage 2 did not add one. Nor is this a gap only on our side — AP2 as read on 2026-10-28
 defines no verifier-checked revocation mechanism either; see
 `docs/MANDATE.md` §6.
 
