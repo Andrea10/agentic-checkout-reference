@@ -239,6 +239,9 @@ appending rather than editing.
 | D143 | The replay is `place_order` resent with a paid order's quote, and its audit line prints as none | ACCEPTED 2 Nov | Demo | The quote guard refuses it `quote_already_ordered` before the mandate check, so "none" is the true audit line (D65, D99, D127). |
 | D144 | The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers | ACCEPTED 2 Nov | Demo | On a basket the untampered mandate covers, `signature_invalid` is visibly the only thing wrong. |
 | D145 | The tool-list test's timeout is 15 s | ACCEPTED 2 Nov | Testing | 15000 ms is 3x the 5000 ms the test overran under heavy load in T12a; measured runs here all passed at the default. |
+| D150 | The recording's timing is synthetic: 0.3 s a line, 2 s before each banner | PROPOSED | Demo | No clock is read, so the casts are byte-identical across invocations and their hashes can be pinned. |
+| D151 | The README's image is an animated SVG drawn by the recording script | PROPOSED | Demo | No new dependency: about sixty lines draw it, it is regenerated and pinned with the casts, and a viewer that does not animate shows every line. |
+| D152 | Run 3's cast is a slice of the same output, found by its banners | PROPOSED | Demo | One package.json line and an argument; scripts/demo.ts and its output are unchanged. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.

@@ -3588,3 +3588,64 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   unnoticed; the new test now pins the wording too, and any rewording has to
   edit it. "Nothing here touches real money: the payment rail is a stub." is
   kept as it was, and is still wrong on a Stripe run (D125).
+
+## D150 · The recording's timing is synthetic: 0.3 s a line, 2 s before each banner — PROPOSED
+
+- **Decision.** `scripts/record.ts` gives each printed line an event 300 ms
+  after the one before it, and adds 2000 ms before the rule that opens each
+  run's banner and the closing "WHAT TO READ NEXT". Times are kept in integer
+  milliseconds and written as `ms / 1000`. The cast header carries the three
+  fields asciicast v2 requires (`version`, `width`, `height`) and nothing
+  else: 166 columns, since the widest demo line is 164, and 40 rows.
+- **Alternative.** Record a real session with the asciinema recorder, or time
+  each chunk off the wall clock as the demo writes it.
+- **Why.** The row asks for a cast that is byte-identical across invocations,
+  with a pinned hash. Any clock reading makes every recording different. A
+  delay per line, not per character, keeps the event count equal to the line
+  count, which the test checks line for line against the demo's text. 0.3 s
+  makes run 3 about 27 s, the length the brief asks for; 2 s marks where a
+  run starts.
+- **Cost.** The pauses carry no information about how long anything took, and
+  RECORDING.md has to say so. Optional header fields (`timestamp`, `env`,
+  `title`) are left out, so a player shows no date or title. The whole-demo
+  cast is about 81 s, long for a viewer.
+
+## D151 · The README's image is an animated SVG drawn by the recording script — PROPOSED
+
+- **Decision.** `scripts/record.ts` renders `docs/demo-run3.cast` to
+  `docs/demo-run3.svg` itself: one `<text>` per line, each held at opacity 0
+  by a CSS animation that lasts until the line's time in the cast, then ends.
+  `textLength` holds each line to its column count. The SVG's hash is pinned
+  with the casts'.
+- **Alternative.** svg-term-cli (npm, MIT, 2.1.1, last published 2022; its
+  README does not say it reads asciicast v2) as a dev dependency, or agg
+  (asciinema's GIF generator, GPL-3.0, a Rust binary; its README says it reads
+  v1 to v3) run by hand with a committed GIF.
+- **Why.** The row says no new dependency, and both tools would be one, or a
+  binary outside npm whose output this repository cannot regenerate in CI.
+  About sixty lines of TypeScript make a file that is text, small, diffable,
+  regenerated with the casts, and pinned by the same test. Because the
+  animation hides lines rather than shows them, a viewer that does not
+  animate SVG shows the whole run instead of nothing; reduced motion does the
+  same.
+- **Cost.** It is a renderer for this demo's output only: plain lines, no
+  ANSI escapes, no cursor movement, no scrolling (the SVG is as tall as run 3,
+  84 lines). The animation plays once and does not loop. How GitHub's image
+  proxy treats the animation has not been checked; it was checked in
+  headless Chrome only.
+
+## D152 · Run 3's cast is a slice of the same output, found by its banners — PROPOSED
+
+- **Decision.** `npm run demo:record` takes an optional argument, `all` (the
+  default), `full` or `run3`; there is one package.json line. Run 3's cast is
+  the captured output from the rule above " RUN 3 — " to the line before the
+  rule above " WHAT TO READ NEXT", so it holds the banner, the mandate, the
+  five attempts and the closing invariant. `scripts/demo.ts` is not changed.
+  If either banner is missing, the cut throws.
+- **Alternative.** A flag on `scripts/demo.ts` that runs or prints run 3 alone.
+- **Why.** The row allows `scripts/` but the brief says not to change what the
+  demo prints; slicing the one captured output keeps both casts from the same
+  bytes and leaves the demo's pinned output (sha1 8e1af72d) alone. A test pins
+  where the cut starts and ends.
+- **Cost.** The cut depends on two banner strings. A rewording of either
+  breaks the recording loudly, and someone has to update the slicer.
