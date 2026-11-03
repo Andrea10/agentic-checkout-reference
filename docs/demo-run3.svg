@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1426" height="1544" viewBox="0 0 1426 1544">
+<style>
+text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:14px;fill:#d0d7de;white-space:pre;animation-name:wait;animation-timing-function:step-end}
+@keyframes wait{from,to{opacity:0}}
+@media (prefers-reduced-motion:reduce){text{animation:none}}
+</style>
+<rect width="1426" height="1544" rx="6" fill="#0d1117"/>
+<text x="16" y="29" textLength="621.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:2.3s">--------------------------------------------------------------------------</text>
+<text x="16" y="47" textLength="403.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:2.6s"> RUN 3 — five attempts to spend past the mandate</text>
+<text x="16" y="65" textLength="621.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:2.9s">--------------------------------------------------------------------------</text>
+<text x="16" y="101" textLength="327.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:3.5s">THE MANDATE — what the principal signed</text>
+<text x="16" y="119" textLength="495.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:3.8s">  principal-demo lets agent-buyer-1 spend at merchant-demo:</text>
+<text x="16" y="137" textLength="319.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:4.1s">    up to £50.00 (5000 pence) in total</text>
+<text x="16" y="155" textLength="403.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:4.4s">    at most £25.00 (2500 pence) in any one order</text>
+<text x="16" y="173" textLength="268.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:4.7s">    in GBP and no other currency</text>
+<text x="16" y="191" textLength="478.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:5s">    between 2026-10-25T00:00:00Z and 2026-10-26T00:00:00Z</text>
+<text x="16" y="209" textLength="646.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:5.3s">    without asking up to £30.00 (3000 pence); above that a human must confirm</text>
+<text x="16" y="227" textLength="554.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:5.6s">  Signed Ed25519 over the canonical claims. The merchant holds the</text>
+<text x="16" y="245" textLength="579.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:5.9s">  issuer's public key, read from ACR_MANDATE_PUBLIC_KEY, and no other</text>
+<text x="16" y="263" textLength="571.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:6.2s">  key material: the private key never leaves the issuer, and nothing</text>
+<text x="16" y="281" textLength="285.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:6.5s">  derived from it is printed here.</text>
+<text x="16" y="299" textLength="554.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:6.8s">  The same limits as run 1, under a mandate id of its own. In each</text>
+<text x="16" y="317" textLength="579.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:7.1s">  attempt below the agent presents this mandate (in attempt 5, with a</text>
+<text x="16" y="335" textLength="562.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:7.4s">  field added), and each is printed with what the merchant answered</text>
+<text x="16" y="353" textLength="218.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:7.7s">  and what it left behind.</text>
+<text x="16" y="389" textLength="327.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:8.3s">ATTEMPT 1 OF 5 — over the per-order cap</text>
+<text x="16" y="407" textLength="596.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:8.6s">  tries        Gallowbrook Cafetiere, £27.50 (2750 pence), in one order</text>
+<text x="16" y="425" textLength="495.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:8.9s">  the limit    at most £25.00 (2500 pence) in any one order</text>
+<text x="16" y="443" textLength="512.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:9.2s">  refused      mandate_refused [per_transaction_cap_exceeded]</text>
+<text x="16" y="461" textLength="630.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:9.5s">  why          2750 is above this mandate's per-transaction cap of 2500 GBP</text>
+<text x="16" y="479" textLength="126.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:9.8s">  1 audit line:</text>
+<text x="16" y="497" textLength="1377.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:10.1s">    2026-10-25T09:00:00.000Z  refuse            2750 GBP  agent-buyer-1 -&gt; merchant-demo  mandate 33333333-3333-4333-8333-333333333333  per_transaction_cap_exceeded</text>
+<text x="16" y="515" textLength="512.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:10.4s">  money        0 rail calls; spent £0.00 (0 pence), unchanged</text>
+<text x="16" y="551" textLength="504.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:11s">BETWEEN ATTEMPTS 1 AND 2 — two orders the mandate does cover</text>
+<text x="16" y="569" textLength="520.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:11.3s">  order_000001 — paid, £20.45 (2045 pence), quote quote_000002</text>
+<text x="16" y="587" textLength="520.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:11.6s">  order_000002 — paid, £20.45 (2045 pence), quote quote_000003</text>
+<text x="16" y="605" textLength="487.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:11.9s">  Each one is Elderflint Notebook and Dunlin Merino Socks,</text>
+<text x="16" y="623" textLength="243.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:12.2s">  the basket of runs 1 and 2.</text>
+<text x="16" y="641" textLength="756.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:12.5s">  Mandate budget: £40.90 (4090 pence) spent of £50.00 (5000 pence), £9.10 (910 pence) left</text>
+<text x="16" y="659" textLength="571.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:12.8s">  Run 3 means to pay nothing else. Each attempt below is measured on</text>
+<text x="16" y="677" textLength="403.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:13.1s">  its own, from just before it to just after it.</text>
+<text x="16" y="713" textLength="310.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:13.7s">ATTEMPT 2 OF 5 — over the budget left</text>
+<text x="16" y="731" textLength="495.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:14s">  tries        Elderflint Notebook and Dunlin Merino Socks,</text>
+<text x="16" y="749" textLength="520.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:14.3s">               £20.45 (2045 pence), the basket of runs 1 and 2</text>
+<text x="16" y="767" textLength="613.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:14.6s">  the limit    £9.10 (910 pence) left of the £50.00 (5000 pence) in total</text>
+<text x="16" y="785" textLength="403.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:14.9s">  refused      mandate_refused [budget_exceeded]</text>
+<text x="16" y="803" textLength="714.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:15.2s">  why          2045 is more than the 910 GBP left of this mandate's total cap of 5000</text>
+<text x="16" y="821" textLength="126.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:15.5s">  1 audit line:</text>
+<text x="16" y="839" textLength="1268.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:15.8s">    2026-10-25T09:00:00.000Z  refuse            2045 GBP  agent-buyer-1 -&gt; merchant-demo  mandate 33333333-3333-4333-8333-333333333333  budget_exceeded</text>
+<text x="16" y="857" textLength="546.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:16.1s">  money        0 rail calls; spent £40.90 (4090 pence), unchanged</text>
+<text x="16" y="893" textLength="470.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:16.7s">ATTEMPT 3 OF 5 — at a merchant the mandate does not name</text>
+<text x="16" y="911" textLength="495.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:17s">  tries        Elderflint Notebook and Dunlin Merino Socks,</text>
+<text x="16" y="929" textLength="445.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:17.3s">               £20.45 (2045 pence), at merchant-other</text>
+<text x="16" y="947" textLength="579.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:17.6s">  the limit    good at merchant-demo and nowhere else; merchant-other</text>
+<text x="16" y="965" textLength="512.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:17.9s">               trusts the same issuer, so the signature holds</text>
+<text x="16" y="983" textLength="420.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:18.2s">  refused      mandate_refused [merchant_mismatch]</text>
+<text x="16" y="1001" textLength="630.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:18.5s">  why          this mandate is good at merchant-demo, not at merchant-other</text>
+<text x="16" y="1019" textLength="126.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:18.8s">  1 audit line:</text>
+<text x="16" y="1037" textLength="1293.6" lengthAdjust="spacingAndGlyphs" style="animation-duration:19.1s">    2026-10-25T09:00:00.000Z  refuse            2045 GBP  agent-buyer-1 -&gt; merchant-other  mandate 33333333-3333-4333-8333-333333333333  merchant_mismatch</text>
+<text x="16" y="1055" textLength="546.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:19.4s">  money        0 rail calls; spent £40.90 (4090 pence), unchanged</text>
+<text x="16" y="1091" textLength="420.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:20s">ATTEMPT 4 OF 5 — a replay of an order already paid</text>
+<text x="16" y="1109" textLength="630.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:20.3s">  tries        place_order again with quote_000003, which order_000002 paid</text>
+<text x="16" y="1127" textLength="470.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:20.6s">  the limit    a quote is good for one order (D64, D127)</text>
+<text x="16" y="1145" textLength="302.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:20.9s">  refused      quote_already_ordered</text>
+<text x="16" y="1163" textLength="680.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:21.2s">  why          quote quote_000003 has already been ordered as order_000002 (paid)</text>
+<text x="16" y="1181" textLength="546.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:21.5s">  audit line   none: refused before the mandate check (D65, D127)</text>
+<text x="16" y="1199" textLength="546.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:21.8s">  money        0 rail calls; spent £40.90 (4090 pence), unchanged</text>
+<text x="16" y="1235" textLength="512.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:22.4s">ATTEMPT 5 OF 5 — the mandate with a field added after signing</text>
+<text x="16" y="1253" textLength="546.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:22.7s">  tries        Elderflint Notebook, £8.95 (895 pence), within the</text>
+<text x="16" y="1271" textLength="588.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:23s">               £9.10 (910 pence) left, with "extra_budget_minor": 5000</text>
+<text x="16" y="1289" textLength="462.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:23.3s">               added to the mandate after it was signed</text>
+<text x="16" y="1307" textLength="504.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:23.6s">  the limit    every field but the signature is signed (D23)</text>
+<text x="16" y="1325" textLength="420.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:23.9s">  refused      mandate_refused [signature_invalid]</text>
+<text x="16" y="1343" textLength="764.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:24.2s">  why          the mandate was not signed by the expected issuer, or has been changed since</text>
+<text x="16" y="1361" textLength="126.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:24.5s">  1 audit line:</text>
+<text x="16" y="1379" textLength="1276.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:24.8s">    2026-10-25T09:00:00.000Z  refuse            895 GBP  agent-buyer-1 -&gt; merchant-demo  mandate 33333333-3333-4333-8333-333333333333  signature_invalid</text>
+<text x="16" y="1397" textLength="546.0" lengthAdjust="spacingAndGlyphs" style="animation-duration:25.1s">  money        0 rail calls; spent £40.90 (4090 pence), unchanged</text>
+<text x="16" y="1433" textLength="470.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:25.7s">THE INVARIANT — read off both ledgers and both rail logs</text>
+<text x="16" y="1451" textLength="520.8" lengthAdjust="spacingAndGlyphs" style="animation-duration:26s">  5 attempts, 5 refused. Money moved by them: £0.00 (0 pence).</text>
+<text x="16" y="1469" textLength="554.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:26.3s">  Rail calls they caused: 0. Added to the ledger: £0.00 (0 pence).</text>
+<text x="16" y="1487" textLength="554.4" lengthAdjust="spacingAndGlyphs" style="animation-duration:26.6s">  No attempt reached the rail, and the ledger moves only after the</text>
+<text x="16" y="1505" textLength="445.2" lengthAdjust="spacingAndGlyphs" style="animation-duration:26.9s">  rail captures (D45), so none of them could move it.</text>
+</svg>
