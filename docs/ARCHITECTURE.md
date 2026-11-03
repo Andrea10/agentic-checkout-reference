@@ -566,7 +566,7 @@ confirmations in flight through the server, the second is refused
 `await` (`merchant/pay.ts`), so the first call runs to the rail before the
 second starts. The second is refused before the mandate check, so it writes no
 mandate check line, never reaches the rail, and writes no settlement line
-(D99). The refusal in `spendToken` is a second line that only a direct
+(D99). The refusal in `spendToken` is a second guard that only a direct
 `OrderStore` call reaches. `test/merchant/settlement-guards.test.ts` runs two
 `confirm_order` calls through the server against a rail held open, and
 asserts one `authorise`, one `capture`, one payment, one

@@ -126,8 +126,10 @@ describe('two confirm_order calls in flight on one token (D84, D128)', () => {
       const first = confirm(merchant, confirmation_token);
       const second = confirm(merchant, confirmation_token);
       await rail.reached(1);
-      // Either the second call has already been refused, or it too is
-      // waiting at the rail. Both outcomes are reached without a timer.
+      // `settle()` spent the token before the first call's `authorise`, so
+      // the second is refused before the rail. The race waits for that
+      // refusal, or for a second `authorise` if the guard let it through, so
+      // neither outcome needs a timer.
       await Promise.race([rail.reached(2), Promise.race([first, second])]);
       rail.release();
       const results = await Promise.all([first, second]);
