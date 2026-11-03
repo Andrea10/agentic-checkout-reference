@@ -3565,3 +3565,26 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
 - **Cost.** The number is anchored on one observed overrun, not on a
   measured duration under that load. A heavier load can still overrun it.
   A hung call now takes 15 s to fail instead of 5.
+
+## D160 · The demo's title and intro name the three runs — PROPOSED
+
+- **Decision.** `scripts/demo.ts` titles the demo "agentic-checkout-reference
+  — an agent buys something, in three runs". The intro keeps its first three
+  lines and its last, and gains two between them: "Run 3 makes five attempts
+  to spend past the mandate, and all five are refused." The words "spend past
+  the mandate" are run 3's own banner's. The sentence says "are refused", not
+  "the merchant refuses", because attempt 3 is refused by `merchant-other`. A test in
+  `scripts/demo.test.ts` pins the title block and the intro whole, the first
+  ten lines of the output.
+- **Alternative.** A title that names the outcomes, "an agent buys, is asked,
+  and is refused", with the intro unchanged apart from the run 3 sentence.
+- **Why.** The title is the first line of the recording (T14). "In three
+  runs" says how the demo is laid out, which is what the banners below it
+  follow; the outcomes are said once, in the intro, where each run gets its
+  sentence. Keeping "an agent buys something" keeps the old title's voice.
+- **Cost.** The title no longer says that anything is refused; a reader who
+  stops at the first line learns the shape, not the result. Before T14b no
+  test pinned the title or intro, so the text could drift from the runs
+  unnoticed; the new test now pins the wording too, and any rewording has to
+  edit it. "Nothing here touches real money: the payment rail is a stub." is
+  kept as it was, and is still wrong on a Stripe run (D125).

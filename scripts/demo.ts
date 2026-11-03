@@ -1268,11 +1268,13 @@ export async function runDemo(stream: OutputStream, options: DemoOptions = {}): 
   const encodedPublicKey = exportPublicKey(keys.publicKey);
   const railFactory = options.rail ?? stubRailFactory;
 
-  p.title('agentic-checkout-reference — an agent buys something, twice');
+  p.title('agentic-checkout-reference — an agent buys something, in three runs');
   p.line();
   p.line('An agent shops at a merchant and pays, inside limits a person');
   p.line('signed in advance. Run 1 stays inside them. Run 2 goes over the');
   p.line('threshold the person set for being asked, so a human confirms.');
+  p.line('Run 3 makes five attempts to spend past the mandate, and all five');
+  p.line('are refused.');
   p.line('Nothing here touches real money: the payment rail is a stub.');
 
   p.section('HOW THIS DEMO IS WIRED');

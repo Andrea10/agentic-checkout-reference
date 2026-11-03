@@ -325,6 +325,26 @@ describe('run 3: five attempts to spend past the mandate', () => {
 });
 
 describe('the printed output', () => {
+  // T14b: the title and intro were written for two runs and outlived run 3.
+  // They are the first lines of the recording (T14), so they are pinned whole.
+  it('opens with a title and an intro that name all three runs', async () => {
+    const { text } = await demo();
+    const rule = '='.repeat(74);
+
+    expect(text.split('\n').slice(0, 10)).toEqual([
+      rule,
+      ' agentic-checkout-reference — an agent buys something, in three runs',
+      rule,
+      '',
+      'An agent shops at a merchant and pays, inside limits a person',
+      'signed in advance. Run 1 stays inside them. Run 2 goes over the',
+      'threshold the person set for being asked, so a human confirms.',
+      'Run 3 makes five attempts to spend past the mandate, and all five',
+      'are refused.',
+      'Nothing here touches real money: the payment rail is a stub.',
+    ]);
+  });
+
   it('shows every amount as pounds and pence beside the minor units', async () => {
     const { text } = await demo();
 
