@@ -180,3 +180,4 @@ chore three-runs-docs PR #39 round 2: fixes at e373089 (T14b decisions D160 to D
 chore three-runs-docs PR #39 round 3: merged origin/main 5e1fa59 (PR #38) at f57aadf; PROGRESS.md conflict resolved by keeping main's lines then this branch's, unchanged; TASKS.md auto-merged (T14a Claimed line only); npm ci, lint, build, typecheck exit 0, test 698 passed 1 skipped 2026-11-02T21:35:27Z
 chore comment-fixes claimed 2026-11-03T10:21:20Z
 chore comment-fixes items 1-4 all found and reworded at 6cfdc04; none NOT FOUND, none NEEDS-ANDREA; item 5 untouched; proofs a-e pass (b: .js and .d.ts identical, .js.map mappings differ by line shift only, whole emit identical with --sourceMap false); lint, typecheck, build exit 0, test 698 passed 1 skipped 2026-11-03T10:25:32Z
+chore comment-fixes PR #42 opened 2026-11-03T10:26:03Z
