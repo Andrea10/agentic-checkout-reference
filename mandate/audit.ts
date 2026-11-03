@@ -81,8 +81,11 @@ export type SettlementOutcome =
   /** The funds were held and could not be taken; the hold is outstanding. */
   | 'capture_failed'
   /**
-   * The rail threw rather than answering, or answered with an amount the
-   * ledger cannot record (D129), so the payment state is unknown.
+   * The rail threw rather than answering, or answered with an amount that
+   * cannot be acted on: one the ledger cannot record, a hold for other than
+   * the amount asked for, or a capture of other than the amount held (D129,
+   * D131). Either way it is treated as no answer and nothing is recorded as
+   * paid.
    */
   | 'rail_unavailable';
 
@@ -124,11 +127,16 @@ export interface SettlementEntry {
   readonly outcome: SettlementOutcome;
   /** Set on `payment_declined` and `capture_failed` only. */
   readonly decline?: SettlementDecline;
-  /** Set on `rail_unavailable` only: the call that never answered. */
+  /**
+   * Set on `rail_unavailable` only: the call that never answered, or whose
+   * answer could not be acted on.
+   */
   readonly rail_call?: AuditRailCall;
   /**
    * Set on `rail_unavailable` only, when the call did answer but with an
-   * amount the ledger cannot record (D129). Absent means no answer at all.
+   * amount that cannot be acted on: one the ledger cannot record, a hold for
+   * other than the amount asked for, or a capture of other than the amount
+   * held (D129, D131). Absent means no answer at all.
    */
   readonly rail_answer?: 'unreadable';
 }
@@ -292,10 +300,10 @@ function reasonsOf(entry: MandateCheckEntry): string {
 /**
  * The last column of a settlement line: why the money did not move.
  *
- * A decline prints its code and who said no. A rail that threw prints the
- * call that never answered, or the call whose answer could not be recorded
- * (D129), and nothing else — its own message does not
- * travel, here for the reason it does not travel on the wire (D85). A payment
+ * A decline prints its code and who said no. A `rail_unavailable` line prints
+ * the call that never answered, or the call whose answer could not be acted
+ * on (D129, D131), and nothing else — the rail's own message does not travel,
+ * here for the reason it does not travel on the wire (D85). A payment
  * that went through has nothing left to say, so it gets the same dash a
  * passed check does.
  */

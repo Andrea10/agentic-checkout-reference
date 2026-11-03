@@ -191,3 +191,6 @@ NEEDS-ANDREA (T14b, not edited, outside the row): README.md has no hit for the o
 NEEDS-ANDREA (T14b): docs/DECISIONS_INDEX.md has no D160 row; the row allows DECISIONS.md only 2026-11-02T21:53:59Z
 T14b proof: npm ci, lint, build, typecheck exit 0; test 699 passed 1 skipped (main 09e2b8e: 698 passed 1 skipped); fresh clone of task/T14b at 6bb7a16: same, demo sha1 8e1af72d…, stderr empty 2026-11-02T21:53:59Z
 T14b PR #40 opened 2026-11-02T21:54:35Z
+chore comment-fixes claimed 2026-11-03T10:21:20Z
+chore comment-fixes items 1-4 all found and reworded at 6cfdc04; none NOT FOUND, none NEEDS-ANDREA; item 5 untouched; proofs a-e pass (b: .js and .d.ts identical, .js.map mappings differ by line shift only, whole emit identical with --sourceMap false); lint, typecheck, build exit 0, test 698 passed 1 skipped 2026-11-03T10:25:32Z
+chore comment-fixes PR #42 opened 2026-11-03T10:26:03Z
