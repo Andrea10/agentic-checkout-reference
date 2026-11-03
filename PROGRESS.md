@@ -213,3 +213,4 @@ T14 proof: npm run lint, typecheck, build, test exit 0; test 713 passed 1 skippe
 NEEDS-ANDREA (T14, not edited, README is embed only): README status table row "3 | Demo recording | planned" is now built; README "Run it" says lint, build and typecheck are "the other three scripts" (now there is demo:record too); the Documents table does not list docs/RECORDING.md 2026-11-03T18:40:04Z
 NEEDS-ANDREA (T14, not edited): docs/DECISIONS_INDEX.md intro still says "137 decisions … None is PROPOSED" and the status count table has no PROPOSED row; D150 to D152 are PROPOSED and D160 is missing its row (another PR). Left for the PR that adds D160 to avoid a conflict 2026-11-03T18:40:04Z
 NEEDS-ANDREA (T14): PROGRESS.md and TASKS.md (Claimed line) are outside the row's dirs but written by prompts/worker.md steps 2 and 10; they appear in git diff --stat 2026-11-03T18:40:04Z
+T14 PR #44 opened 2026-11-03T18:40:54Z
