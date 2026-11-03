@@ -29,6 +29,10 @@ Payments run against a pluggable rail. The default is a deterministic stub. `ACR
 
 ## Run it
 
+[![Run 3 of the demo: five attempts to spend past the mandate, all refused](docs/demo-run3.svg)](docs/demo-run3.cast)
+
+Recordings, as asciicast v2: [run 3](docs/demo-run3.cast), [the whole demo](docs/demo.cast). How they are made: [docs/RECORDING.md](docs/RECORDING.md).
+
 ```bash
 npm install
 npm test
