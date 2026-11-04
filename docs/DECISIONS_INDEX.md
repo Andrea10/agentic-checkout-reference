@@ -3,12 +3,14 @@
 `docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
-and every status, verbatim. **138 decisions, D01 to D131, D140 to D145 and D160.**
-D132 to D139 were allotted to T12c and are unused. All 138 are ACCEPTED —
+and every status, verbatim. **141 decisions, D01 to D131, D140 to D145, D150 to D152 and D160.**
+D132 to D139 were allotted to T12c and are unused. 3 are PROPOSED (D150 to
+D152); all others, 138, are ACCEPTED —
 ruled by Andrea, 25 on 27 October, 84 on 28 October, 7 on 29 October, 11 on
-30 October, 10 on 2 November and 1 on 3 November. None is PROPOSED. D110 to D116 are T10's own;
+30 October, 10 on 2 November and 1 on 3 November. D110 to D116 are T10's own;
 D117 to D125 are T11's, D126 to D127 are T12a's, D128 to D130 are T12b's,
-D131 is T12c's, D140 to D145 are T13's and D160 is T14b's.
+D131 is T12c's, D140 to D145 are T13's, D150 to D152 are T14's and D160 is
+T14b's.
 
 Counts, which a reviewer can check against the file with
 `grep -c '^## D' docs/DECISIONS.md`:
@@ -25,7 +27,8 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 30 Oct)` | 11 |
 | `ACCEPTED (Andrea, 2 Nov)` | 10 |
 | `ACCEPTED (Andrea, 3 Nov)` | 1 |
-| **Total** | **138** |
+| `PROPOSED` | 3 |
+| **Total** | **141** |
 
 If you have five minutes, read §3 and nothing else.
 
@@ -86,6 +89,7 @@ rows in `TASKS.md` allot them:
 | D128–D130 | T12b | concurrency, settlement and cart closure |
 | D131–D139 | T12c | settlement guards (D131 used) |
 | D140–D149 | T13 | demo run 3 (D140–D145 used) |
+| D150–D159 | T14 | the demo recording (D150–D152 used) |
 | D160–D169 | T14b | the demo's title and intro (D160 used) |
 
 The file is ordered by task and not by number, which is why D58 and D59 sit
@@ -254,8 +258,7 @@ a test added to T12)`.
 Statuses in the table are shortened — `ACCEPTED (Andrea, 27 Oct)` reads
 `ACCEPTED 27 Oct` — because every ruling in the file is Andrea's. Nothing else
 is abbreviated, and the two qualified statuses are reproduced in full above.
-None is PROPOSED today; a PROPOSED status would be reproduced as the heading
-writes it.
+D150 to D152 are PROPOSED, reproduced as the heading writes it.
 
 ## 3. Ten decisions that matter
 

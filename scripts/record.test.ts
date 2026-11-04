@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   FULL_CAST,
@@ -23,6 +23,7 @@ import {
   WIDTH,
   build,
   captureDemo,
+  childEnv,
   readCast,
   sliceRunThree,
 } from './record.js';
@@ -63,6 +64,24 @@ describe('the files demo:record writes', () => {
     expect([...build(output, 'run3').keys()]).toEqual([RUN_THREE_CAST, RUN_THREE_SVG]);
     expect([...build(output, 'full').keys()]).toEqual([FULL_CAST]);
   });
+});
+
+describe('the rail the recording shows', () => {
+  it('leaves every ACR_ variable out of the environment and keeps the rest', () => {
+    const env = { ACR_RAIL: 'stripe', ACR_X: '1', PATH: '/bin', NOT_ACR_Y: '2' };
+
+    expect(childEnv(env)).toEqual({ PATH: '/bin', NOT_ACR_Y: '2' });
+  });
+
+  it('is the stub, whatever ACR_ variables the shell has set', () => {
+    vi.stubEnv('ACR_RAIL', 'stripe');
+    vi.stubEnv('ACR_X', '1');
+    try {
+      expect(captureDemo()).toBe(output);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 60_000);
 });
 
 describe('each cast is asciicast v2', () => {

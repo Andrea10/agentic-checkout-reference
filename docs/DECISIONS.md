@@ -3603,8 +3603,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   with a pinned hash. Any clock reading makes every recording different. A
   delay per line, not per character, keeps the event count equal to the line
   count, which the test checks line for line against the demo's text. 0.3 s
-  makes run 3 about 27 s, the length the brief asks for; 2 s marks where a
-  run starts.
+  makes run 3 about 27 s, near the 30 s the build lead's brief, recorded in
+  PROGRESS.md, asks for; 2 s marks where a run starts.
 - **Cost.** The pauses carry no information about how long anything took, and
   RECORDING.md has to say so. Optional header fields (`timestamp`, `env`,
   `title`) are left out, so a player shows no date or title. The whole-demo
@@ -3613,12 +3613,14 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
 ## D151 · The README's image is an animated SVG drawn by the recording script — PROPOSED
 
 - **Decision.** `scripts/record.ts` renders `docs/demo-run3.cast` to
-  `docs/demo-run3.svg` itself: one `<text>` per line, each held at opacity 0
-  by a CSS animation that lasts until the line's time in the cast, then ends.
+  `docs/demo-run3.svg` itself: one `<text>` per non-empty line, each held at
+  opacity 0 by a CSS animation that lasts until the line's time in the cast,
+  then ends.
   `textLength` holds each line to its column count. The SVG's hash is pinned
   with the casts'.
-- **Alternative.** svg-term-cli (npm, MIT, 2.1.1, last published 2022; its
-  README does not say it reads asciicast v2) as a dev dependency, or agg
+- **Alternative.** svg-term-cli (npm, MIT, version 2.1.1 published
+  2018-01-21 on npm; the package's registry entry was last modified
+  2022-06-27; its README does not say it reads asciicast v2) as a dev dependency, or agg
   (asciinema's GIF generator, GPL-3.0, a Rust binary; its README says it reads
   v1 to v3) run by hand with a committed GIF.
 - **Why.** The row says no new dependency, and both tools would be one, or a
@@ -3630,9 +3632,11 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   same.
 - **Cost.** It is a renderer for this demo's output only: plain lines, no
   ANSI escapes, no cursor movement, no scrolling (the SVG is as tall as run 3,
-  84 lines). The animation plays once and does not loop. How GitHub's image
-  proxy treats the animation has not been checked; it was checked in
-  headless Chrome only.
+  84 lines). The animation plays once and does not loop. A repo-relative image
+  is served by GitHub directly; the animation was checked in headless
+  Chromium as an `<img>` served over HTTP at README width (plays once, holds
+  the full run, reduced motion shows every line); GitHub's own page is checked
+  by Andrea before merge.
 
 ## D152 · Run 3's cast is a slice of the same output, found by its banners — PROPOSED
 
@@ -3643,8 +3647,8 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   five attempts and the closing invariant. `scripts/demo.ts` is not changed.
   If either banner is missing, the cut throws.
 - **Alternative.** A flag on `scripts/demo.ts` that runs or prints run 3 alone.
-- **Why.** The row allows `scripts/` but the brief says not to change what the
-  demo prints; slicing the one captured output keeps both casts from the same
+- **Why.** The row allows `scripts/` but the build lead's brief, recorded in
+  PROGRESS.md, says not to change what the demo prints; slicing the one captured output keeps both casts from the same
   bytes and leaves the demo's pinned output (sha1 8e1af72d) alone. A test pins
   where the cut starts and ends.
 - **Cost.** The cut depends on two banner strings. A rewording of either

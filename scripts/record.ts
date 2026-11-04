@@ -51,19 +51,22 @@ const SECTION_RULE = '-'.repeat(74);
 const TITLE_RULE = '='.repeat(74);
 
 /**
- * Runs `tsx scripts/demo.ts` and hands back what it printed.
- *
- * Every `ACR_` variable is dropped from the child's environment, so the
+ * The environment the demo runs in: `env` without its `ACR_` variables, so the
  * recording is always of the default stub rail, whatever the shell has set.
  */
-export function captureDemo(): string {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [name, value] of Object.entries(process.env)) {
-    if (!name.startsWith('ACR_')) env[name] = value;
+export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const kept: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!name.startsWith('ACR_')) kept[name] = value;
   }
+  return kept;
+}
+
+/** Runs `tsx scripts/demo.ts` and hands back what it printed. */
+export function captureDemo(): string {
   const result = spawnSync(join(ROOT, 'node_modules', '.bin', 'tsx'), ['scripts/demo.ts'], {
     cwd: ROOT,
-    env,
+    env: childEnv(process.env),
     encoding: 'utf8',
   });
   if (result.error !== undefined) throw result.error;

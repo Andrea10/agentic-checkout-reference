@@ -25,11 +25,11 @@ Payments run against a pluggable rail. The default is a deterministic stub. `ACR
 | 1 | Skeleton that runs end to end on a stub rail; ACP-shaped merchant tools; mandate checks; tests; CI | **done** |
 | 2 | Stripe test-mode rail (mocked client); failure-case suite and replay protection (expired, wrong merchant, over cap, replay); concurrency and settlement guards; demo run 3 | **done** |
 | 3 | Design decisions ([docs/DECISIONS.md](docs/DECISIONS.md)); protocol divergence notes ([docs/MANDATE.md](docs/MANDATE.md) §5 for AP2, D27 to D39 for ACP) | **done** |
-| 3 | Demo recording | planned |
+| 3 | Demo recording | **done** |
 
 ## Run it
 
-[![Run 3 of the demo: five attempts to spend past the mandate, all refused](docs/demo-run3.svg)](docs/demo-run3.cast)
+[![Run 3 of the demo: five attempts to spend past the mandate, all refused](docs/demo-run3.svg)](docs/RECORDING.md)
 
 Recordings, as asciicast v2: [run 3](docs/demo-run3.cast), [the whole demo](docs/demo.cast). How they are made: [docs/RECORDING.md](docs/RECORDING.md).
 
@@ -62,8 +62,8 @@ version; a Stripe test-mode run is not byte-identical, D125.)
 Node 22.13 or later. No keys are needed: the demo generates its mandate keys in
 memory and uses the stub rail, and `npm test` runs the Stripe rail against a
 mocked client, skipping the one live test unless `STRIPE_SECRET_KEY` is set
-(and always in CI). `npm run lint`, `npm run build` and `npm run typecheck` are
-the other three scripts.
+(and always in CI). `npm run lint`, `npm run build`, `npm run typecheck` and
+`npm run demo:record` are the other four scripts.
 
 ## Documents
 
@@ -73,6 +73,7 @@ the other three scripts.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the pieces, the order states, where each check runs, and **its known limits** |
 | [docs/SEQUENCE.md](docs/SEQUENCE.md) | the paths of the three demo runs: runs 1 and 2 as diagrams, run 3 as a table |
 | [docs/MANDATE.md](docs/MANDATE.md) | the mandate field by field, how it is signed, and the field-by-field mapping to AP2 |
+| [docs/RECORDING.md](docs/RECORDING.md) | what the demo recordings are, how to regenerate them, and what they do not show |
 | [docs/DECISIONS_INDEX.md](docs/DECISIONS_INDEX.md) | every decision in one table, and the ten that matter |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | every decision in full: what, the alternative, why, and what it cost |
 
@@ -83,8 +84,8 @@ merchant/   MCP server: catalogue, cart, quote, place_order, confirm_order (synt
 agent/      buyer agent that calls the merchant tools
 mandate/    issue, sign, verify; policy checks; audit log
 rail/       payment interface; stub (the default), Stripe test mode (ACR_RAIL=stripe)
-scripts/    the demo and its tests; the stdio smoke test
-docs/       PRD, architecture, sequence diagrams, the mandate and AP2, decisions
+scripts/    the demo and its tests; the recording script and its tests; the stdio smoke test
+docs/       PRD, architecture, sequence diagrams, the mandate and AP2, decisions, the recording and its casts
 test/
 ```
 
