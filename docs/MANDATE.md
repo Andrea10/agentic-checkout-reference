@@ -12,9 +12,10 @@ marked UNVERIFIED rather than guessed.
 ## 1. The object
 
 A mandate is flat: ten claims and a signature over them
-(`mandate/types.ts`). It is kept flat for Stage 1 deliberately — the gap to
-AP2 is better described than half-implemented, and this document is where the
-description was always going to live (D10).
+(`mandate/types.ts`). It is kept flat deliberately — D10 ruled it for Stage 1,
+and Stage 2 left it flat — because the gap to AP2 is better described than
+half-implemented, and this document is where the description was always going
+to live.
 
 ```json
 {
@@ -42,7 +43,7 @@ and is described rather than printed — see §1a.
 | Field | Type | Holds | Checked by |
 | --- | --- | --- | --- |
 | `mandate_id` | string (a UUID) | the identity of this authority. The key the spend ledger is keyed on, and the only identifier the issuer and the merchant both already hold (D44) | nothing checks it; it is the ledger key and appears on every audit entry |
-| `principal` | string | the human who granted the authority | nothing. It is recorded, not verified: Stage 1 has no notion of a principal identity |
+| `principal` | string | the human who granted the authority | nothing. It is recorded, not verified: the repository has no notion of a principal identity |
 | `agent` | string | the agent the authority was granted *to* | compared with the `agent` argument of `place_order` → `agent_mismatch` |
 | `merchant` | string | the single merchant the authority is good at | compared with the merchant's own configured id → `merchant_mismatch` |
 | `currency` | string (ISO 4217) | the currency every cap below is denominated in | compared with the quote's currency → `currency_mismatch` |
