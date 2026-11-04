@@ -30,7 +30,7 @@ version) and turns what it printed into the files above:
   `scripts/demo.ts` is unchanged; if its banners move, the cut fails loudly
   rather than silently recording something else.
 - **The SVG is drawn by the same script** (D151), with no dependency: one line
-  of text per printed line, each hidden until its time in the cast. A viewer
+  of text per non-empty printed line, each hidden until its time in the cast. A viewer
   that does not run SVG animations, or that asks for reduced motion, shows
   every line at once.
 - **The rail is always the stub.** Every `ACR_` variable is dropped from the
@@ -66,7 +66,7 @@ agg docs/demo-run3.cast demo-run3.gif
 agg docs/demo.cast demo.gif
 ```
 
-agg has not been run against these files here. Its options (themes, font size,
+agg was run once against both files in the pre-review of PR #44 (3 November 2026) and both commands worked; its output is not committed. Its options (themes, font size,
 idle-time limiting, which could shorten the 2 s pauses) are in
 [its docs](https://docs.asciinema.org/manual/agg/).
 
