@@ -3589,7 +3589,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   edit it. "Nothing here touches real money: the payment rail is a stub." is
   kept as it was, and is still wrong on a Stripe run (D125).
 
-## D150 · The recording's timing is synthetic: 0.3 s a line, 2 s before each banner — PROPOSED
+## D150 · The recording's timing is synthetic: 0.3 s a line, 2 s before each banner — ACCEPTED (Andrea, 4 Nov)
 
 - **Decision.** `scripts/record.ts` gives each printed line an event 300 ms
   after the one before it, and adds 2000 ms before the rule that opens each
@@ -3610,7 +3610,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   `title`) are left out, so a player shows no date or title. The whole-demo
   cast is about 81 s, long for a viewer.
 
-## D151 · The README's image is an animated SVG drawn by the recording script — PROPOSED
+## D151 · The README's image is an animated SVG drawn by the recording script — ACCEPTED (Andrea, 4 Nov)
 
 - **Decision.** `scripts/record.ts` renders `docs/demo-run3.cast` to
   `docs/demo-run3.svg` itself: one `<text>` per non-empty line, each held at
@@ -3635,10 +3635,10 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   84 lines). The animation plays once and does not loop. A repo-relative image
   is served by GitHub directly; the animation was checked in headless
   Chromium as an `<img>` served over HTTP at README width (plays once, holds
-  the full run, reduced motion shows every line); GitHub's own page is checked
-  by Andrea before merge.
+  the full run, reduced motion shows every line). Andrea checked GitHub's
+  rendering on 4 November 2026; the animation plays line by line and ends showing the whole run.
 
-## D152 · Run 3's cast is a slice of the same output, found by its banners — PROPOSED
+## D152 · Run 3's cast is a slice of the same output, found by its banners — ACCEPTED (Andrea, 4 Nov)
 
 - **Decision.** `npm run demo:record` takes an optional argument, `all` (the
   default), `full` or `run3`; there is one package.json line. Run 3's cast is
