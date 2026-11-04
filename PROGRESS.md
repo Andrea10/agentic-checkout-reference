@@ -209,3 +209,4 @@ chore final-docs: comments: scripts/demo.test.ts:6 "Runs 1 and 2 reach their two
 NEEDS-ANDREA (final-docs, not edited): scripts/demo.ts:1285 "sequential, so two runs print the same text" is printed output (demo line 17, field 'ids'), not a comment; changing it changes the demo output and its hash. It means two invocations 2026-11-03T18:34:21Z
 NEEDS-ANDREA (final-docs, not edited, outside the brief): scripts/demo.test.ts:12 header comment "Two runs print the same text" has the same two-runs-means-two-invocations ambiguity; and TASKS.md lists T14 (recording) under Stage 2 with no merge, so the docs say what Stage 2 added rather than that Stage 2 is complete 2026-11-03T18:34:21Z
 chore final-docs PR #43 opened 2026-11-03T18:38:21Z
+chore final-docs fix round: docs/ARCHITECTURE.md:665 "all 137 decisions" -> "all 138 decisions", from pre-review on 07e3cea; no other current count of 137 in the repo (PROGRESS.md history left as written) 2026-11-04T00:05:58Z
