@@ -3,12 +3,12 @@
 `docs/DECISIONS.md` is over 2,800 lines and append-only. This is the way in.
 
 The table below is generated from its `## D..` headings: every id, every title
-and every status, verbatim. **137 decisions, D01 to D131 and D140 to D145.**
-D132 to D139 were allotted to T12c and are unused. All 137 are ACCEPTED —
+and every status, verbatim. **138 decisions, D01 to D131, D140 to D145 and D160.**
+D132 to D139 were allotted to T12c and are unused. All 138 are ACCEPTED —
 ruled by Andrea, 25 on 27 October, 84 on 28 October, 7 on 29 October, 11 on
-30 October and 10 on 2 November. None is PROPOSED. D110 to D116 are T10's own;
+30 October, 10 on 2 November and 1 on 3 November. None is PROPOSED. D110 to D116 are T10's own;
 D117 to D125 are T11's, D126 to D127 are T12a's, D128 to D130 are T12b's,
-D131 is T12c's and D140 to D145 are T13's.
+D131 is T12c's, D140 to D145 are T13's and D160 is T14b's.
 
 Counts, which a reviewer can check against the file with
 `grep -c '^## D' docs/DECISIONS.md`:
@@ -24,7 +24,8 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 29 Oct)` | 7 |
 | `ACCEPTED (Andrea, 30 Oct)` | 11 |
 | `ACCEPTED (Andrea, 2 Nov)` | 10 |
-| **Total** | **137** |
+| `ACCEPTED (Andrea, 3 Nov)` | 1 |
+| **Total** | **138** |
 
 If you have five minutes, read §3 and nothing else.
 
@@ -85,6 +86,7 @@ rows in `TASKS.md` allot them:
 | D128–D130 | T12b | concurrency, settlement and cart closure |
 | D131–D139 | T12c | settlement guards (D131 used) |
 | D140–D149 | T13 | demo run 3 (D140–D145 used) |
+| D160–D169 | T14b | the demo's title and intro (D160 used) |
 
 The file is ordered by task and not by number, which is why D58 and D59 sit
 before D50, and D90 to D93 before D80. It is append-only: a range was allotted
@@ -239,6 +241,7 @@ appending rather than editing.
 | D143 | The replay is `place_order` resent with a paid order's quote, and its audit line prints as none | ACCEPTED 2 Nov | Demo | The quote guard refuses it `quote_already_ordered` before the mandate check, so "none" is the true audit line (D65, D99, D127). |
 | D144 | The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers | ACCEPTED 2 Nov | Demo | On a basket the untampered mandate covers, `signature_invalid` is visibly the only thing wrong. |
 | D145 | The tool-list test's timeout is 15 s | ACCEPTED 2 Nov | Testing | 15000 ms is 3x the 5000 ms the test overran under heavy load in T12a; measured runs here all passed at the default. |
+| D160 | The demo's title and intro name the three runs | ACCEPTED 3 Nov | Demo | The title says "in three runs" and the intro gains a run 3 sentence, "all five are refused"; a test pins the first ten lines. |
 | D150 | The recording's timing is synthetic: 0.3 s a line, 2 s before each banner | PROPOSED | Demo | No clock is read, so the casts are byte-identical across invocations and their hashes can be pinned. |
 | D151 | The README's image is an animated SVG drawn by the recording script | PROPOSED | Demo | No new dependency: about sixty lines draw it, it is regenerated and pinned with the casts, and a viewer that does not animate shows every line. |
 | D152 | Run 3's cast is a slice of the same output, found by its banners | PROPOSED | Demo | One package.json line and an argument; scripts/demo.ts and its output are unchanged. |

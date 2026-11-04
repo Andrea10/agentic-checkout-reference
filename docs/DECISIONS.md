@@ -3566,7 +3566,7 @@ per-transaction cap, the same GBP, and the same 25-to-26 October window
   measured duration under that load. A heavier load can still overrun it.
   A hung call now takes 15 s to fail instead of 5.
 
-## D160 · The demo's title and intro name the three runs — PROPOSED
+## D160 · The demo's title and intro name the three runs — ACCEPTED (Andrea, 3 Nov)
 
 - **Decision.** `scripts/demo.ts` titles the demo "agentic-checkout-reference
   — an agent buys something, in three runs". The intro keeps its first three

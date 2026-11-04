@@ -171,7 +171,7 @@ export async function settle(
   // are checked here, before the order is marked paid, so a paid order and its
   // recorded spend cannot disagree, and a zero or partial capture is not
   // booked as a payment (D131). The hold was checked before capture, so this
-  // is the second line: a rail that held a good amount and reported taking
+  // is the second guard: a rail that held a good amount and reported taking
   // another. By its own answer the money has moved, but the answer cannot be
   // acted on, so it is treated like no answer: the order stays `authorised`
   // and nothing is recorded as paid (D85, D129).
