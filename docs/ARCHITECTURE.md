@@ -662,4 +662,4 @@ closes its cart, and another quote of that cart is refused `cart_closed`
 | `agent/order.ts` | the one place a mandate is presented |
 | `docs/MANDATE.md` | the mandate field by field, and the AP2 mapping |
 | `docs/SEQUENCE.md` | both paths as diagrams |
-| `docs/DECISIONS_INDEX.md` | all 138 decisions, and the ten that matter |
+| `docs/DECISIONS_INDEX.md` | all 141 decisions, and the ten that matter |

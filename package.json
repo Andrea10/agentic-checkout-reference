@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "demo": "tsx scripts/demo.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "demo:record": "tsx scripts/record.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
