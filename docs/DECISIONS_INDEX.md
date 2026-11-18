@@ -4,10 +4,9 @@
 
 The table below is generated from its `## D..` headings: every id, every title
 and every status, verbatim. **141 decisions, D01 to D131, D140 to D145, D150 to D152 and D160.**
-D132 to D139 were allotted to T12c and are unused. 3 are PROPOSED (D150 to
-D152); all others, 138, are ACCEPTED —
+D132 to D139 were allotted to T12c and are unused. All 141 are ACCEPTED —
 ruled by Andrea, 25 on 27 October, 84 on 28 October, 7 on 29 October, 11 on
-30 October, 10 on 2 November and 1 on 3 November. D110 to D116 are T10's own;
+30 October, 10 on 2 November, 1 on 3 November and 3 on 4 November. None is PROPOSED. D110 to D116 are T10's own;
 D117 to D125 are T11's, D126 to D127 are T12a's, D128 to D130 are T12b's,
 D131 is T12c's, D140 to D145 are T13's, D150 to D152 are T14's and D160 is
 T14b's.
@@ -27,7 +26,7 @@ Counts, which a reviewer can check against the file with
 | `ACCEPTED (Andrea, 30 Oct)` | 11 |
 | `ACCEPTED (Andrea, 2 Nov)` | 10 |
 | `ACCEPTED (Andrea, 3 Nov)` | 1 |
-| `PROPOSED` | 3 |
+| `ACCEPTED (Andrea, 4 Nov)` | 3 |
 | **Total** | **141** |
 
 If you have five minutes, read §3 and nothing else.
@@ -246,9 +245,9 @@ appending rather than editing.
 | D144 | The tampered mandate adds `extra_budget_minor`, on a basket the budget left covers | ACCEPTED 2 Nov | Demo | On a basket the untampered mandate covers, `signature_invalid` is visibly the only thing wrong. |
 | D145 | The tool-list test's timeout is 15 s | ACCEPTED 2 Nov | Testing | 15000 ms is 3x the 5000 ms the test overran under heavy load in T12a; measured runs here all passed at the default. |
 | D160 | The demo's title and intro name the three runs | ACCEPTED 3 Nov | Demo | The title says "in three runs" and the intro gains a run 3 sentence, "all five are refused"; a test pins the first ten lines. |
-| D150 | The recording's timing is synthetic: 0.3 s a line, 2 s before each banner | PROPOSED | Demo | No clock is read, so the casts are byte-identical across invocations and their hashes can be pinned. |
-| D151 | The README's image is an animated SVG drawn by the recording script | PROPOSED | Demo | No new dependency: about sixty lines draw it, it is regenerated and pinned with the casts, and a viewer that does not animate shows every line. |
-| D152 | Run 3's cast is a slice of the same output, found by its banners | PROPOSED | Demo | One package.json line and an argument; scripts/demo.ts and its output are unchanged. |
+| D150 | The recording's timing is synthetic: 0.3 s a line, 2 s before each banner | ACCEPTED 4 Nov | Demo | No clock is read, so the casts are byte-identical across invocations and their hashes can be pinned. |
+| D151 | The README's image is an animated SVG drawn by the recording script | ACCEPTED 4 Nov | Demo | No new dependency: about sixty lines draw it, it is regenerated and pinned with the casts, and a viewer that does not animate shows every line. |
+| D152 | Run 3's cast is a slice of the same output, found by its banners | ACCEPTED 4 Nov | Demo | One package.json line and an argument; scripts/demo.ts and its output are unchanged. |
 
 ¹ D86's full status is `ACCEPTED (Andrea, 28 Oct; the audit gap it records is
 closed by T07c)`.
@@ -258,7 +257,8 @@ a test added to T12)`.
 Statuses in the table are shortened — `ACCEPTED (Andrea, 27 Oct)` reads
 `ACCEPTED 27 Oct` — because every ruling in the file is Andrea's. Nothing else
 is abbreviated, and the two qualified statuses are reproduced in full above.
-D150 to D152 are PROPOSED, reproduced as the heading writes it.
+None is PROPOSED today; a PROPOSED status would be reproduced as the heading
+writes it.
 
 ## 3. Ten decisions that matter
 
