@@ -51,14 +51,17 @@ Ruling 26 Oct (Andrea OS, S133-9): `docs/DECISIONS.md` is append-only and allowe
 - T07c · `task/T07c` · PR #20 · claimed 2026-10-28T20:18:30Z · merged 28 Oct
 - T09 · `task/T09` · PR #21 · claimed 2026-10-28T20:27:49Z · merged 28 Oct
 - T10 · `task/T10` · PR #23 · claimed 2026-10-28T21:57:57Z · merged 29 Oct
-- T10b · `task/T10b` · PR #25 · claimed 2026-10-30T00:09:23Z
-- T10c · `task/T10c` · PR #27 · claimed 2026-10-30T01:39:58Z
-- T11 · `task/T11` · PR #29 · claimed 2026-10-30T12:12:31Z
-- T12a · `task/T12a` · PR #30 · claimed 2026-10-30T15:03:08Z
-- T12b · `task/T12b` · PR #32 · claimed 2026-10-31T01:17:06Z
-- T12c · `task/T12c` · PR #34 · claimed 2026-11-01T11:39:50Z
-- T13 · `task/T13` · PR #35 · claimed 2026-11-01T11:40:05Z
-- T14a · `task/T14a` · PR #38 · claimed 2026-11-02T16:55:53Z
-- T14b · `task/T14b` · PR #40 · claimed 2026-11-02T21:50:29Z
-- chore readme-polish · `chore/readme-polish` · PR #41 · claimed 2026-11-03T10:21:12Z
-- T14 · `task/T14` · PR #44 · claimed 2026-11-03T18:31:10Z
+- T10b · `task/T10b` · PR #25 · claimed 2026-10-30T00:09:23Z · merged 30 Oct
+- T10c · `task/T10c` · PR #27 · claimed 2026-10-30T01:39:58Z · merged 30 Oct
+- T11 · `task/T11` · PR #29 · claimed 2026-10-30T12:12:31Z · merged 30 Oct
+- T12a · `task/T12a` · PR #30 · claimed 2026-10-30T15:03:08Z · merged 30 Oct
+- T12b · `task/T12b` · PR #32 · claimed 2026-10-31T01:17:06Z · merged 31 Oct
+- T12c · `task/T12c` · PR #34 · claimed 2026-11-01T11:39:50Z · merged 2 Nov
+- T13 · `task/T13` · PR #35 · claimed 2026-11-01T11:40:05Z · merged 2 Nov
+- T14a · `task/T14a` · PR #38 · claimed 2026-11-02T16:55:53Z · merged 2 Nov
+- T14b · `task/T14b` · PR #40 · claimed 2026-11-02T21:50:29Z · merged 3 Nov
+- chore readme-polish · `chore/readme-polish` · PR #41 · claimed 2026-11-03T10:21:12Z · merged 3 Nov
+- T14 · `task/T14` · PR #44 · claimed 2026-11-03T18:31:10Z · merged 4 Nov
+- chore rulings-d150-d152 · `chore/rulings-d150-d152` · PR #45 · claimed 2026-11-04T14:12:26Z · merged 18 Nov
+
+Queue closed 14 Nov 2026 (Andrea): no further tasks. See docs/factory/SESSION_R3.md.
